@@ -23,14 +23,14 @@ export interface User {
 export interface Question {
   id: string;
   text: string;
-  arText: string; // Arabic version
+  arText: string;
   weight: number;
 }
 
 export interface Category {
   id: string;
   name: string;
-  arName: string; // Arabic version
+  arName: string;
   weight: number;
   questions: Question[];
 }
@@ -38,9 +38,9 @@ export interface Category {
 export interface SurveyTemplate {
   id: string;
   name: string;
-  arName: string; // Arabic version
+  arName: string;
   description: string;
-  arDescription: string; // Arabic version
+  arDescription: string;
   categories: Category[];
 }
 
@@ -53,4 +53,9 @@ export interface SurveyResponse {
   date: string;
   answers: Record<string, number>;
   weightedScore: number;
+}
+
+export interface PasswordChangeRequest {
+  currentPassword: string;
+  newPassword: string;
 }

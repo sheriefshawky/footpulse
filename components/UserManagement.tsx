@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, Language } from '../types';
-import { UserPlus, Search, Mail, Phone, X, UserCheck } from 'lucide-react';
+import { UserPlus, Search, Mail, Phone, X, UserCheck, Lock, Edit3 } from 'lucide-react';
 import { translations } from '../translations';
+import { api } from '../api';
 
 interface Props {
   users: User[];
@@ -14,13 +15,17 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
   const t = translations[lang];
   const isRtl = lang === 'ar';
   const [showModal, setShowModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const [filter, setFilter] = useState('');
-  const [newUser, setNewUser] = useState<Partial<User>>({
+  
+  const [formData, setFormData] = useState({
+    id: '',
     role: UserRole.PLAYER,
     name: '',
     email: '',
     mobile: '',
-    password: 'password123',
+    password: '',
+    confirmPassword: '',
     trainerId: '',
     playerId: ''
   });
@@ -33,37 +38,85 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
   const trainers = users.filter(u => u.role === UserRole.TRAINER);
   const players = users.filter(u => u.role === UserRole.PLAYER);
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUser.name || !newUser.email || !newUser.mobile) return;
+  const openRegisterModal = () => {
+    setEditMode(false);
+    setFormData({
+      id: '',
+      role: UserRole.PLAYER,
+      name: '',
+      email: '',
+      mobile: '',
+      password: '',
+      confirmPassword: '',
+      trainerId: '',
+      playerId: ''
+    });
+    setShowModal(true);
+  };
 
-    // Additional validation for conditional roles
-    if (newUser.role === UserRole.PLAYER && !newUser.trainerId) {
+  const openEditModal = (user: User) => {
+    setEditMode(true);
+    setFormData({
+      id: user.id,
+      role: user.role,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      password: '',
+      confirmPassword: '',
+      trainerId: user.trainerId || '',
+      playerId: user.playerId || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.email || !formData.mobile) return;
+
+    if (!editMode && formData.password !== formData.confirmPassword) {
+      alert(t.passwordsDoNotMatch);
+      return;
+    }
+
+    if (formData.role === UserRole.PLAYER && !formData.trainerId) {
       alert("Please select a trainer for the player.");
       return;
     }
-    if (newUser.role === UserRole.GUARDIAN && !newUser.playerId) {
+    if (formData.role === UserRole.GUARDIAN && !formData.playerId) {
       alert("Please assign a player to the guardian.");
       return;
     }
 
-    const id = `u-${Math.random().toString(36).substr(2, 9)}`;
-    onRegister({
-      ...newUser,
-      id,
-      avatar: `https://picsum.photos/200/200?random=${users.length + 10}`,
-    } as User);
-    
-    setShowModal(false);
-    setNewUser({ 
-      role: UserRole.PLAYER, 
-      name: '', 
-      email: '', 
-      mobile: '', 
-      password: 'password123',
-      trainerId: '',
-      playerId: ''
-    });
+    try {
+      if (editMode) {
+        const updatedUser = await api.put(`/users/${formData.id}`, {
+          name: formData.name,
+          email: formData.email,
+          mobile: formData.mobile,
+          role: formData.role,
+          trainer_id: formData.trainerId || null,
+          player_id: formData.playerId || null
+        });
+        alert(t.userUpdated);
+        window.location.reload(); // Quick refresh to update user list
+      } else {
+        const payload = {
+          name: formData.name,
+          email: formData.email,
+          mobile: formData.mobile,
+          role: formData.role,
+          password: formData.password,
+          trainer_id: formData.trainerId || null,
+          player_id: formData.playerId || null
+        };
+        const createdUser = await api.post('/users', payload);
+        onRegister(createdUser);
+      }
+      setShowModal(false);
+    } catch (err: any) {
+      alert(err.message || "Operation failed");
+    }
   };
 
   return (
@@ -74,7 +127,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           <p className="text-slate-500 font-medium">{isRtl ? 'أضف وأشرف على طاقم الأكاديمية واللاعبين وأولياء الأمور.' : 'Add and oversee academy staff, players, and guardians.'}</p>
         </div>
         <button 
-          onClick={() => setShowModal(true)}
+          onClick={openRegisterModal}
           className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all text-sm md:text-base"
         >
           <UserPlus className="w-5 h-5" />
@@ -151,7 +204,13 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                     {!u.trainerId && !u.playerId && <span className="text-[10px] text-slate-300 italic font-medium">{isRtl ? 'لا يوجد' : 'None'}</span>}
                   </td>
                   <td className={`px-6 py-4 ${isRtl ? 'text-left' : 'text-right'}`}>
-                    <button className="text-[10px] font-black text-slate-400 hover:text-emerald-600 uppercase tracking-widest transition-colors">{isRtl ? 'تعديل' : 'Edit'}</button>
+                    <button 
+                      onClick={() => openEditModal(u)}
+                      className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-emerald-600 uppercase tracking-widest transition-colors"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      {isRtl ? 'تعديل' : 'Edit'}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -160,13 +219,12 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
         </div>
       </div>
 
-      {/* Modal Overlay */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className={`p-6 md:p-8 border-b border-slate-100 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
               <div className={isRtl ? 'text-right' : ''}>
-                <h3 className="text-xl md:text-2xl font-bold text-slate-900">{t.registerMember}</h3>
+                <h3 className="text-xl md:text-2xl font-bold text-slate-900">{editMode ? t.editMember : t.registerMember}</h3>
                 <p className="text-xs md:text-sm font-medium text-slate-500 mt-1">{isRtl ? 'قم بإعداد الملف الشخصي والدور وعلاقات الأكاديمية.' : 'Setup profile, role, and academy relations.'}</p>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
@@ -174,15 +232,15 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
               </button>
             </div>
 
-            <form onSubmit={handleRegister} className={`p-6 md:p-8 space-y-5 md:space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar ${isRtl ? 'text-right' : ''}`}>
+            <form onSubmit={handleSubmit} className={`p-6 md:p-8 space-y-5 md:space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar ${isRtl ? 'text-right' : ''}`}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <div className="md:col-span-2 space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.fullName}</label>
                   <input 
                     required
                     type="text" 
-                    value={newUser.name}
-                    onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
                     placeholder="e.g. Cristiano Ronaldo"
                     className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium ${isRtl ? 'text-right' : ''}`}
                   />
@@ -193,8 +251,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                   <input 
                     required
                     type="email" 
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
                     placeholder="name@footpulse.app"
                     className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium ${isRtl ? 'text-right' : ''}`}
                   />
@@ -205,18 +263,55 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                   <input 
                     required
                     type="tel" 
-                    value={newUser.mobile}
-                    onChange={(e) => setNewUser({...newUser, mobile: e.target.value})}
+                    value={formData.mobile}
+                    onChange={(e) => setFormData({...formData, mobile: e.target.value})}
                     placeholder="+44 7700 900000"
                     className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium ${isRtl ? 'text-right' : ''}`}
                   />
                 </div>
 
+                {!editMode && (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.password}</label>
+                      <div className="relative">
+                        <Lock className={`absolute ${isRtl ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
+                        <input 
+                          required
+                          type="password" 
+                          value={formData.password}
+                          onChange={(e) => setFormData({...formData, password: e.target.value})}
+                          placeholder="••••••••"
+                          className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.confirmPassword}</label>
+                      <div className="relative">
+                        <Lock className={`absolute ${isRtl ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
+                        <input 
+                          required
+                          type="password" 
+                          value={formData.confirmPassword}
+                          onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                          placeholder="••••••••"
+                          className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
+                        />
+                      </div>
+                      {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                        <p className="text-[10px] text-rose-500 font-bold px-1">{t.passwordsDoNotMatch}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.personaRole}</label>
                   <select 
-                    value={newUser.role}
-                    onChange={(e) => setNewUser({...newUser, role: e.target.value as UserRole})}
+                    value={formData.role}
+                    onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
                     className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-slate-700 text-sm ${isRtl ? 'text-right' : ''}`}
                   >
                     <option value={UserRole.PLAYER}>{t.player}</option>
@@ -226,14 +321,13 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                   </select>
                 </div>
 
-                {/* Conditional Relations */}
-                {newUser.role === UserRole.PLAYER && (
+                {formData.role === UserRole.PLAYER && (
                   <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
                     <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest px-1">{t.assignTrainer}</label>
                     <select 
                       required
-                      value={newUser.trainerId}
-                      onChange={(e) => setNewUser({...newUser, trainerId: e.target.value})}
+                      value={formData.trainerId}
+                      onChange={(e) => setFormData({...formData, trainerId: e.target.value})}
                       className={`w-full px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-slate-700 text-sm ${isRtl ? 'text-right' : ''}`}
                     >
                       <option value="">{isRtl ? 'اختر المدرب...' : 'Select Coach...'}</option>
@@ -244,13 +338,13 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                   </div>
                 )}
 
-                {newUser.role === UserRole.GUARDIAN && (
+                {formData.role === UserRole.GUARDIAN && (
                   <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
                     <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest px-1">{t.assignPlayer}</label>
                     <select 
                       required
-                      value={newUser.playerId}
-                      onChange={(e) => setNewUser({...newUser, playerId: e.target.value})}
+                      value={formData.playerId}
+                      onChange={(e) => setFormData({...formData, playerId: e.target.value})}
                       className={`w-full px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-slate-700 text-sm ${isRtl ? 'text-right' : ''}`}
                     >
                       <option value="">{isRtl ? 'اختر اللاعب...' : 'Select Child/Player...'}</option>
@@ -274,7 +368,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                   type="submit"
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform active:scale-[0.98] text-sm"
                 >
-                  {t.createAccount}
+                  {editMode ? t.saveChanges : t.createAccount}
                 </button>
               </div>
             </form>

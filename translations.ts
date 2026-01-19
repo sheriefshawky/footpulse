@@ -20,6 +20,7 @@ export const translations = {
     startAssessment: "Start Assessment",
     begin: "Begin",
     registerMember: "Register Member",
+    editMember: "Edit Member",
     fullName: "Full Name",
     emailAddress: "Email Address",
     mobileNumber: "Mobile Number",
@@ -27,6 +28,7 @@ export const translations = {
     assignTrainer: "Assign Trainer",
     assignPlayer: "Assign Player",
     createAccount: "Create Account",
+    saveChanges: "Save Changes",
     cancel: "Cancel",
     search: "Search players, sessions...",
     evaluationSubmitted: "Evaluation Submitted",
@@ -52,7 +54,16 @@ export const translations = {
     competencyProfile: "Competency Profile",
     growthPath: "Growth Path",
     dataInsights: "Data Insights",
-    squadEvaluationTracker: "Squad Monthly Assessment Tracker"
+    squadEvaluationTracker: "Squad Monthly Assessment Tracker",
+    password: "Password",
+    confirmPassword: "Confirm Password",
+    currentPassword: "Current Password",
+    newPassword: "New Password",
+    changePassword: "Change Password",
+    passwordsDoNotMatch: "Passwords do not match",
+    profileSettings: "Profile Settings",
+    passwordUpdated: "Password updated successfully",
+    userUpdated: "User updated successfully"
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -74,6 +85,7 @@ export const translations = {
     startAssessment: "بدء التقييم",
     begin: "بدء",
     registerMember: "تسجيل عضو",
+    editMember: "تعديل عضو",
     fullName: "الاسم الكامل",
     emailAddress: "البريد الإلكتروني",
     mobileNumber: "رقم الجوال",
@@ -81,6 +93,7 @@ export const translations = {
     assignTrainer: "تعيين مدرب",
     assignPlayer: "تعيين لاعب",
     createAccount: "إنشاء حساب",
+    saveChanges: "حفظ التغييرات",
     cancel: "إلغاء",
     search: "بحث عن لاعبين، جلسات...",
     evaluationSubmitted: "تم تقديم التقييم",
@@ -106,6 +119,15 @@ export const translations = {
     competencyProfile: "ملف الكفاءة",
     growthPath: "مسار النمو",
     dataInsights: "رؤى البيانات",
-    squadEvaluationTracker: "متتبع التقييم الشهري للفريق"
+    squadEvaluationTracker: "متتبع التقييم الشهري للفريق",
+    password: "كلمة المرور",
+    confirmPassword: "تأكيد كلمة المرور",
+    currentPassword: "كلمة المرور الحالية",
+    newPassword: "كلمة المرور الجديدة",
+    changePassword: "تغيير كلمة المرور",
+    passwordsDoNotMatch: "كلمات المرور غير متطابقة",
+    profileSettings: "إعدادات الملف الشخصي",
+    passwordUpdated: "تم تحديث كلمة المرور بنجاح",
+    userUpdated: "تم تحديث العضو بنجاح"
   }
 };
