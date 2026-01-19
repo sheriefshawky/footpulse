@@ -71,7 +71,10 @@ const Login: React.FC<Props> = ({ onLogin, lang, toggleLang }) => {
               <div className="p-2 bg-slate-900 rounded-2xl shadow-xl shadow-emerald-500/20 border border-slate-800">
                  <FootPulseLogo size={60} />
               </div>
-              <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">FootPulse</h1>
+              <h1 className="text-3xl md:text-5xl font-black italic tracking-tighter">
+                <span className="text-[#0079AD]">Foot</span>
+                <span className="text-[#7BC242]">Pulse</span>
+              </h1>
            </div>
 
            <div className={`space-y-2 mb-8 md:mb-10 ${isRtl ? 'text-right' : 'text-left'}`}>
@@ -164,9 +167,9 @@ const Login: React.FC<Props> = ({ onLogin, lang, toggleLang }) => {
                   </span>
                </div>
                
-               <h2 className="text-3xl xl:text-5xl font-black text-white leading-tight mb-4 tracking-tighter">
+               <h2 className="text-3xl xl:text-5xl font-black text-white leading-tight mb-4 tracking-tighter italic">
                  {lang === 'en' ? (
-                   <>Your Football <br/><span className="text-emerald-300">DNA</span> Visualized.</>
+                   <><span className="text-[#0079AD]">Foot</span><span className="text-[#7BC242]">Pulse</span> <br/><span className="text-emerald-300">DNA</span> Visualized.</>
                  ) : (
                    <>بصمتك الكروية <br/><span className="text-emerald-300">الرقمية</span> مجسدة أمامك.</>
                  )}

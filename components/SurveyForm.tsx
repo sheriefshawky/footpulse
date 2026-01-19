@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, SurveyTemplate, SurveyResponse, Category, Language } from '../types';
-import { CheckCircle, AlertCircle, ArrowLeft, Send } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowLeft, Send, Check } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -27,19 +27,19 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, onSubmit
   };
 
   const calculateWeightedScore = () => {
-    let totalScore = 0;
+    let totalWeightedScore = 0;
     template.categories.forEach(category => {
       let categoryRawScore = 0;
       let totalQuestionWeights = 0;
       category.questions.forEach(q => {
-        const score = answers[q.id] || 5;
+        const score = answers[q.id] || 0; // Defaulting to 0 if not answered, though we block submission
         categoryRawScore += (score / 10) * q.weight;
         totalQuestionWeights += q.weight;
       });
-      const categoryPercentage = (categoryRawScore / totalQuestionWeights) * 100;
-      totalScore += (categoryPercentage * category.weight) / 100;
+      // categoryRawScore is already a weighted percentage within the category
+      totalWeightedScore += (categoryRawScore * category.weight) / 100;
     });
-    return Math.round(totalScore);
+    return Math.round(totalWeightedScore);
   };
 
   const isCurrentCategoryComplete = currentCategory.questions.every(q => answers[q.id] !== undefined);
@@ -88,42 +88,65 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, onSubmit
           <div className="mb-12">
             <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-2">{isRtl ? currentCategory.arName : currentCategory.name}</h2>
             <p className="text-slate-500 font-medium">
-              {isRtl ? "يرجى تقديم تقييم صادق من 1 (يحتاج لتحسين) إلى 10 (مستوى نخبوي)." : "Please provide an honest rating from 1 (Needs Improvement) to 10 (Elite Level)."}
+              {isRtl ? "يرجى الإجابة بدقة على جميع الأسئلة في هذا القسم." : "Please answer all questions in this section accurately."}
             </p>
           </div>
 
           <div className="space-y-12">
             {currentCategory.questions.map((q) => (
-              <div key={q.id} className="space-y-6">
+              <div key={q.id} className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
                 <div className={`flex items-start justify-between gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
                    <h5 className="text-lg font-bold text-slate-800 leading-snug max-w-xl">{isRtl ? q.arText : q.text}</h5>
-                   <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black whitespace-nowrap">WT: {q.weight}%</span>
+                   <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black whitespace-nowrap uppercase tracking-widest">WT: {q.weight}%</span>
                 </div>
                 
-                <div className="space-y-4">
-                  <div className={`flex justify-between text-xs font-bold text-slate-400 px-1 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                    <span>1: {isRtl ? "مبتدئ" : "AMATEUR"}</span>
-                    <span>10: {isRtl ? "محترف" : "PRO"}</span>
-                  </div>
-                  <div className={`flex items-center gap-6 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                    <input 
-                      type="range" 
-                      min="1" 
-                      max="10" 
-                      step="1"
-                      value={answers[q.id] || 5}
-                      onChange={(e) => handleScoreChange(q.id, parseInt(e.target.value))}
-                      className="flex-1 h-3 bg-slate-100 rounded-full appearance-none cursor-pointer accent-emerald-500"
-                    />
-                    <div className={`w-14 h-14 flex items-center justify-center rounded-2xl text-2xl font-black border-2 transition-all ${
-                      answers[q.id] 
-                      ? 'bg-emerald-50 border-emerald-500 text-emerald-600' 
-                      : 'bg-white border-slate-200 text-slate-300'
-                    }`}>
-                      {answers[q.id] || '?'}
+                {q.type === 'RATING' ? (
+                  <div className="space-y-4">
+                    <div className={`flex justify-between text-xs font-bold text-slate-400 px-1 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                      <span>1: {isRtl ? "مبتدئ" : "AMATEUR"}</span>
+                      <span>10: {isRtl ? "محترف" : "PRO"}</span>
+                    </div>
+                    <div className={`flex items-center gap-6 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                      <input 
+                        type="range" 
+                        min="1" 
+                        max="10" 
+                        step="1"
+                        value={answers[q.id] || 5}
+                        onChange={(e) => handleScoreChange(q.id, parseInt(e.target.value))}
+                        className="flex-1 h-3 bg-slate-100 rounded-full appearance-none cursor-pointer accent-emerald-500"
+                      />
+                      <div className={`w-14 h-14 flex items-center justify-center rounded-2xl text-2xl font-black border-2 transition-all ${
+                        answers[q.id] !== undefined
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-lg shadow-emerald-500/10' 
+                        : 'bg-white border-slate-200 text-slate-300'
+                      }`}>
+                        {answers[q.id] || '?'}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-3`}>
+                    {q.options?.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleScoreChange(q.id, opt.value)}
+                        className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between group ${
+                          answers[q.id] === opt.value
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-lg shadow-emerald-500/5'
+                          : 'border-slate-100 bg-slate-50/50 hover:border-slate-200 text-slate-600 hover:bg-slate-50'
+                        } ${isRtl ? 'flex-row-reverse text-right' : ''}`}
+                      >
+                        <span className="text-sm font-bold">{isRtl ? opt.arText : opt.text}</span>
+                        {answers[q.id] === opt.value && (
+                          <div className="bg-emerald-500 text-white p-1 rounded-full">
+                            <Check className="w-3 h-3" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -136,7 +159,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, onSubmit
                  <AlertCircle className="w-5 h-5" />
                )}
                <span className="text-xs font-bold uppercase tracking-wider">
-                 {isCurrentCategoryComplete ? (isRtl ? "جاهز للإرسال" : "Section Ready") : (isRtl ? "مطلوب الإكمال" : "Completion required")}
+                 {isCurrentCategoryComplete ? (isRtl ? "جاهز للمتابعة" : "Section Ready") : (isRtl ? "مطلوب الإكمال" : "Completion required")}
                </span>
              </div>
 

@@ -18,8 +18,15 @@ export const api = {
     }
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'API Request failed');
+      let errorDetail = 'API Request failed';
+      try {
+        const error = await response.json();
+        errorDetail = error.detail || errorDetail;
+      } catch (e) {
+        // Fallback if response is not JSON
+        errorDetail = response.statusText || errorDetail;
+      }
+      throw new Error(errorDetail);
     }
     
     return response.json();

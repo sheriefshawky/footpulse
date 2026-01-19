@@ -15,9 +15,10 @@ export const INITIAL_TEMPLATES: SurveyTemplate[] = [
         arName: 'الكفاءة الفنية',
         weight: 30,
         questions: [
-          { id: 'q-tech-1', text: 'Ball Control & First Touch', arText: 'التحكم بالكرة واللمسة الأولى', weight: 34 },
-          { id: 'q-tech-2', text: 'Passing Accuracy & Vision', arText: 'دقة التمرير والرؤية', weight: 33 },
-          { id: 'q-tech-3', text: 'Shooting & Finishing Efficiency', arText: 'كفاءة التسديد والإنهاء', weight: 33 }
+          // Added missing type property
+          { id: 'q-tech-1', text: 'Ball Control & First Touch', arText: 'التحكم بالكرة واللمسة الأولى', weight: 34, type: 'RATING' },
+          { id: 'q-tech-2', text: 'Passing Accuracy & Vision', arText: 'دقة التمرير والرؤية', weight: 33, type: 'RATING' },
+          { id: 'q-tech-3', text: 'Shooting & Finishing Efficiency', arText: 'كفاءة التسديد والإنهاء', weight: 33, type: 'RATING' }
         ]
       },
       {
@@ -26,9 +27,10 @@ export const INITIAL_TEMPLATES: SurveyTemplate[] = [
         arName: 'اللياقة البدنية',
         weight: 30,
         questions: [
-          { id: 'q-phys-1', text: 'Match Fitness & Stamina', arText: 'لياقة المباراة والتحمل', weight: 40 },
-          { id: 'q-phys-2', text: 'Speed & Acceleration', arText: 'السرعة والتسارع', weight: 30 },
-          { id: 'q-phys-3', text: 'Strength & Physical Duels', arText: 'القوة والتحام البدني', weight: 30 }
+          // Added missing type property
+          { id: 'q-phys-1', text: 'Match Fitness & Stamina', arText: 'لياقة المباراة والتحمل', weight: 40, type: 'RATING' },
+          { id: 'q-phys-2', text: 'Speed & Acceleration', arText: 'السرعة والتسارع', weight: 30, type: 'RATING' },
+          { id: 'q-phys-3', text: 'Strength & Physical Duels', arText: 'القوة والتحام البدني', weight: 30, type: 'RATING' }
         ]
       },
       {
@@ -37,9 +39,10 @@ export const INITIAL_TEMPLATES: SurveyTemplate[] = [
         arName: 'التكتيكي والسلوكي',
         weight: 40,
         questions: [
-          { id: 'q-behav-1', text: 'Positioning & Tactical Awareness', arText: 'التمركز والوعي التكتيكي', weight: 40 },
-          { id: 'q-behav-2', text: 'Work Rate & Team Spirit', arText: 'معدل العمل وروح الفريق', weight: 30 },
-          { id: 'q-behav-3', text: 'Discipline & Punctuality', arText: 'الانضباط والالتزام بالوقت', weight: 30 }
+          // Added missing type property
+          { id: 'q-behav-1', text: 'Positioning & Tactical Awareness', arText: 'التمركز والوعي التكتيكي', weight: 40, type: 'RATING' },
+          { id: 'q-behav-2', text: 'Work Rate & Team Spirit', arText: 'معدل العمل وروح الفريق', weight: 30, type: 'RATING' },
+          { id: 'q-behav-3', text: 'Discipline & Punctuality', arText: 'الانضباط والالتزام بالوقت', weight: 30, type: 'RATING' }
         ]
       }
     ]
@@ -57,8 +60,9 @@ export const INITIAL_TEMPLATES: SurveyTemplate[] = [
         arName: 'الجهد والعقلية',
         weight: 100,
         questions: [
-          { id: 'q-self-1', text: 'I am satisfied with my training effort', arText: 'أنا راضٍ عن جهدي في التدريب', weight: 50 },
-          { id: 'q-self-2', text: 'I feel motivated to improve my skills', arText: 'أشعر بالتحفيز لتحسين مهاراتي', weight: 50 }
+          // Added missing type property
+          { id: 'q-self-1', text: 'I am satisfied with my training effort', arText: 'أنا راضٍ عن جهدي في التدريب', weight: 50, type: 'RATING' },
+          { id: 'q-self-2', text: 'I feel motivated to improve my skills', arText: 'أشعر بالتحفيز لتحسين مهاراتي', weight: 50, type: 'RATING' }
         ]
       }
     ]
@@ -76,9 +80,10 @@ export const INITIAL_TEMPLATES: SurveyTemplate[] = [
         arName: 'جودة التدريب',
         weight: 100,
         questions: [
-          { id: 'q-ce-1', text: 'Clarity of coaching instructions', arText: 'وضوح تعليمات التدريب', weight: 40 },
-          { id: 'q-ce-2', text: 'Personal feedback received from coach', arText: 'الملاحظات الشخصية المستلمة من المدرب', weight: 30 },
-          { id: 'q-ce-3', text: 'Level of support and encouragement', arText: 'مستوى الدعم والتشجيع', weight: 30 }
+          // Added missing type property
+          { id: 'q-ce-1', text: 'Clarity of coaching instructions', arText: 'وضوح تعليمات التدريب', weight: 40, type: 'RATING' },
+          { id: 'q-ce-2', text: 'Personal feedback received from coach', arText: 'الملاحظات الشخصية المستلمة من المدرب', weight: 30, type: 'RATING' },
+          { id: 'q-ce-3', text: 'Level of support and encouragement', arText: 'مستوى الدعم والتشجيع', weight: 30, type: 'RATING' }
         ]
       }
     ]
@@ -96,8 +101,9 @@ export const INITIAL_TEMPLATES: SurveyTemplate[] = [
         arName: 'بيئة الأكاديمية',
         weight: 100,
         questions: [
-          { id: 'q-guard-1', text: 'Satisfaction with academy facilities', arText: 'الرضا عن مرافق الأكاديمية', weight: 50 },
-          { id: 'q-guard-2', text: 'Clarity of academy communication', arText: 'وضوح تواصل الأكاديمية', weight: 50 }
+          // Added missing type property
+          { id: 'q-guard-1', text: 'Satisfaction with academy facilities', arText: 'الرضا عن مرافق الأكاديمية', weight: 50, type: 'RATING' },
+          { id: 'q-guard-2', text: 'Clarity of academy communication', arText: 'وضوح تواصل الأكاديمية', weight: 50, type: 'RATING' }
         ]
       }
     ]

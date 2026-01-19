@@ -8,6 +8,15 @@ export enum UserRole {
 
 export type Language = 'en' | 'ar';
 
+export type QuestionType = 'RATING' | 'MULTIPLE_CHOICE';
+
+export interface QuestionOption {
+  id: string;
+  text: string;
+  arText: string;
+  value: number; // The score value (e.g. 1-10) associated with this choice
+}
+
 export interface User {
   id: string;
   name: string;
@@ -25,6 +34,8 @@ export interface Question {
   text: string;
   arText: string;
   weight: number;
+  type: QuestionType;
+  options?: QuestionOption[];
 }
 
 export interface Category {
@@ -42,6 +53,16 @@ export interface SurveyTemplate {
   description: string;
   arDescription: string;
   categories: Category[];
+}
+
+export interface SurveyAssignment {
+  id: string;
+  templateId: string;
+  assignerId: string;
+  respondentId: string;
+  targetId: string;
+  month: string;
+  status: 'PENDING' | 'COMPLETED';
 }
 
 export interface SurveyResponse {

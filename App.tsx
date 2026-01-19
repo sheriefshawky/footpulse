@@ -14,20 +14,22 @@ import {
   X,
   Globe,
   Lock,
-  User as UserIcon
+  User as UserIcon,
+  FileText
 } from 'lucide-react';
 import { 
   User, 
   UserRole, 
   SurveyTemplate, 
   SurveyResponse, 
+  SurveyAssignment,
   Language 
 } from './types';
-import { INITIAL_TEMPLATES } from './constants';
 import { translations } from './translations';
 import { api } from './api';
 import Dashboard from './components/Dashboard';
 import UserManagement from './components/UserManagement';
+import TemplateManagement from './components/TemplateManagement';
 import SurveyList from './components/SurveyList';
 import SurveyForm from './components/SurveyForm';
 import Analytics from './components/Analytics';
@@ -46,8 +48,9 @@ const App: React.FC = () => {
   });
 
   const [users, setUsers] = useState<User[]>([]);
-  const [templates] = useState<SurveyTemplate[]>(INITIAL_TEMPLATES);
+  const [templates, setTemplates] = useState<SurveyTemplate[]>([]);
   const [responses, setResponses] = useState<SurveyResponse[]>([]);
+  const [assignments, setAssignments] = useState<SurveyAssignment[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -67,18 +70,30 @@ const App: React.FC = () => {
     document.documentElement.lang = lang;
   }, [lang, isRtl]);
 
-  useEffect(() => {
+  const refreshData = async () => {
     if (currentUser) {
       setLoading(true);
-      Promise.all([
-        api.get('/users'),
-        api.get('/responses')
-      ]).then(([usersData, responsesData]) => {
+      try {
+        const [usersData, responsesData, templatesData, assignmentsData] = await Promise.all([
+          api.get('/users'),
+          api.get('/responses'),
+          api.get('/templates'),
+          api.get('/assignments')
+        ]);
         setUsers(usersData);
         setResponses(responsesData);
-      }).catch(err => console.error("Data fetch error", err))
-      .finally(() => setLoading(false));
+        setTemplates(templatesData);
+        setAssignments(assignmentsData);
+      } catch (err) {
+        console.error("Data fetch error", err);
+      } finally {
+        setLoading(false);
+      }
     }
+  };
+
+  useEffect(() => {
+    refreshData();
   }, [currentUser]);
 
   const sidebarItems = useMemo(() => {
@@ -87,6 +102,7 @@ const App: React.FC = () => {
       { id: 'surveys', label: t.surveys, icon: <ClipboardList className="w-5 h-5" />, roles: [UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'analytics', label: t.analytics, icon: <TrendingUp className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'users', label: t.users, icon: <Users className="w-5 h-5" />, roles: [UserRole.ADMIN] },
+      { id: 'templates', label: t.templates, icon: <FileText className="w-5 h-5" />, roles: [UserRole.ADMIN] },
     ];
     return items.filter(item => item.roles.includes(currentUser?.role as UserRole));
   }, [currentUser, t]);
@@ -99,20 +115,16 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
   };
 
-  const handleRegisterUser = async (newUser: any) => {
-    setUsers(prev => [...prev, newUser]);
-  };
-
   const submitSurvey = async (response: SurveyResponse) => {
     try {
-      const submitted = await api.post('/responses', {
+      await api.post('/responses', {
         template_id: response.templateId,
         target_player_id: response.targetPlayerId,
         month: response.month,
         answers: response.answers,
         weighted_score: response.weightedScore
       });
-      setResponses(prev => [...prev, submitted]);
+      refreshData();
       setActiveSurvey(null);
       setActiveTab('dashboard');
     } catch (err) {
@@ -175,7 +187,10 @@ const App: React.FC = () => {
               <FootPulseLogo size={40} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">FootPulse</h1>
+              <h1 className="text-xl font-black italic tracking-tighter">
+                <span className="text-[#0079AD]">Foot</span>
+                <span className="text-[#7BC242]">Pulse</span>
+              </h1>
               <p className="text-[10px] uppercase font-semibold text-emerald-400">{t.academyHub}</p>
             </div>
           </div>
@@ -250,7 +265,10 @@ const App: React.FC = () => {
              </div>
              <div className="md:hidden flex items-center gap-2">
                 <FootPulseLogo size={32} />
-                <span className="text-lg font-bold text-slate-900">FootPulse</span>
+                <span className="text-lg font-black italic">
+                   <span className="text-[#0079AD]">Foot</span>
+                   <span className="text-[#7BC242]">Pulse</span>
+                </span>
              </div>
           </div>
 
@@ -290,17 +308,20 @@ const App: React.FC = () => {
                   responses={responses} 
                   users={users} 
                   templates={templates}
+                  assignments={assignments}
                   onStartSurvey={(t, id) => setActiveSurvey({template: t, targetId: id})}
                   lang={lang}
                 />
               )}
-              {activeTab === 'users' && <UserManagement users={users} onRegister={handleRegisterUser} lang={lang} />}
+              {activeTab === 'users' && <UserManagement users={users} onRegister={refreshData} lang={lang} />}
+              {activeTab === 'templates' && <TemplateManagement templates={templates} users={users} onUpdate={refreshData} lang={lang} />}
               {activeTab === 'surveys' && (
                 <SurveyList 
                   user={currentUser} 
                   users={users} 
                   templates={templates} 
                   responses={responses}
+                  assignments={assignments}
                   onStartSurvey={(t, id) => setActiveSurvey({template: t, targetId: id})}
                   lang={lang}
                 />
