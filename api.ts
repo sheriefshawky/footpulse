@@ -1,7 +1,7 @@
 
 // Using /api prefix which is proxied by Vite in dev 
 // and can be handled by Nginx/Vercel in production
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'https://footpulsebe-production.up.railway.app';
 
 export const api = {
   async request(endpoint: string, options: RequestInit = {}) {
