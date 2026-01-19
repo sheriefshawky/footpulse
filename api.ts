@@ -1,5 +1,7 @@
 
-const API_BASE_URL = 'https://footpulsebe-production.up.railway.app';
+// Using /api prefix which is proxied by Vite in dev 
+// and can be handled by Nginx/Vercel in production
+const API_BASE_URL = '/api';
 
 export const api = {
   async request(endpoint: string, options: RequestInit = {}) {
@@ -10,26 +12,32 @@ export const api = {
       ...options.headers,
     };
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
-    
-    if (response.status === 401) {
-      localStorage.removeItem('auth_token');
-      window.location.reload();
-    }
-    
-    if (!response.ok) {
-      let errorDetail = 'API Request failed';
-      try {
-        const error = await response.json();
-        errorDetail = error.detail || errorDetail;
-      } catch (e) {
-        // Fallback if response is not JSON
-        errorDetail = response.statusText || errorDetail;
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+      
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('currentUser');
+        window.location.reload();
       }
-      throw new Error(errorDetail);
+      
+      if (!response.ok) {
+        let errorDetail = `Error ${response.status}: ${response.statusText}`;
+        try {
+          const error = await response.json();
+          errorDetail = error.detail || errorDetail;
+        } catch (e) {
+          // Response was not JSON
+        }
+        throw new Error(errorDetail);
+      }
+      
+      return response.json();
+    } catch (err: any) {
+      console.error(`API Error at ${endpoint}:`, err);
+      // Re-throw to be caught by the UI
+      throw err;
     }
-    
-    return response.json();
   },
 
   get(endpoint: string) {
