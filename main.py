@@ -1,7 +1,7 @@
 
 import os
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -153,6 +153,13 @@ class SurveySubmit(BaseModel):
     answers: Dict[str, int]
     weighted_score: float
 
+class TemplateCreateUpdate(BaseModel):
+    name: str
+    arName: str
+    description: str
+    arDescription: str
+    categories: List[Dict[str, Any]]
+
 # --- HELPER MAPPERS ---
 def map_user(u: User):
     return {
@@ -254,10 +261,57 @@ def admin_reset_password(user_id: str, data: AdminResetPassword, current_user: U
     db.commit()
     return {"detail": "Password reset successfully"}
 
+# --- TEMPLATE ROUTES ---
 @app.get("/templates")
 def list_templates(db: Session = Depends(get_db)):
     templates = db.query(SurveyTemplateModel).all()
     return [map_template(t) for t in templates]
+
+@app.post("/templates")
+def create_template(data: TemplateCreateUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    new_id = f"t-{os.urandom(4).hex()}"
+    db_t = SurveyTemplateModel(
+        id=new_id,
+        name=data.name,
+        ar_name=data.arName,
+        description=data.description,
+        ar_description=data.arDescription,
+        categories=data.categories
+    )
+    db.add(db_t)
+    db.commit()
+    db.refresh(db_t)
+    return map_template(db_t)
+
+@app.put("/templates/{template_id}")
+def update_template(template_id: str, data: TemplateCreateUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    db_t = db.query(SurveyTemplateModel).filter(SurveyTemplateModel.id == template_id).first()
+    if not db_t:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    db_t.name = data.name
+    db_t.ar_name = data.arName
+    db_t.description = data.description
+    db_t.ar_description = data.arDescription
+    db_t.categories = data.categories
+    
+    db.commit()
+    return map_template(db_t)
+
+@app.delete("/templates/{template_id}")
+def delete_template(template_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    db_t = db.query(SurveyTemplateModel).filter(SurveyTemplateModel.id == template_id).first()
+    if not db_t:
+        raise HTTPException(status_code=404, detail="Template not found")
+    db.delete(db_t)
+    db.commit()
+    return {"detail": "Template deleted"}
 
 @app.get("/assignments")
 def get_assignments(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -338,14 +392,34 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
 @app.on_event("startup")
 def seed_data():
     db = SessionLocal()
-    if not db.query(User).filter(User.email == "admin@footpulse.app").first():
-        admin = User(id="u-admin-1", name="Academy Director", email="admin@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900000", role=UserRole.ADMIN, avatar="https://picsum.photos/200/200?random=1")
+    # Force reset admin password for demo purposes to ensure consistency with frontend Login component
+    admin_email = "admin@footpulse.app"
+    admin = db.query(User).filter(User.email == admin_email).first()
+    if not admin:
+        admin = User(
+            id="u-admin-1", 
+            name="Academy Director", 
+            email=admin_email, 
+            password_hash=get_password_hash("password123"), 
+            mobile="+44 7700 900000", 
+            role=UserRole.ADMIN, 
+            avatar="https://picsum.photos/200/200?random=1"
+        )
         db.add(admin)
+    else:
+        # Update existing admin to ensure password matches 'password123'
+        admin.password_hash = get_password_hash("password123")
+    
+    # Ensure other demo accounts exist
+    if not db.query(User).filter(User.email == "mike@footpulse.app").first():
         trainer = User(id="u-trainer-1", name="Coach Mike Johnson", email="mike@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900001", role=UserRole.TRAINER, avatar="https://picsum.photos/200/200?random=2")
         db.add(trainer)
+    
+    if not db.query(User).filter(User.email == "leo@footpulse.app").first():
         player = User(id="u-player-1", name="Leo Messi Jr.", email="leo@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900002", role=UserRole.PLAYER, trainer_id="u-trainer-1", avatar="https://picsum.photos/200/200?random=3")
         db.add(player)
-        db.commit()
+    
+    db.commit()
 
     if db.query(SurveyTemplateModel).count() == 0:
         db_t = SurveyTemplateModel(

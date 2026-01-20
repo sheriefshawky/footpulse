@@ -145,6 +145,73 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
     setEditingTemplate({ ...editingTemplate, categories: nextCats });
   };
 
+  const addOption = (catId: string, qId: string) => {
+    if (!editingTemplate) return;
+    const nextCats = editingTemplate.categories.map(cat => {
+      if (cat.id === catId) {
+        return {
+          ...cat,
+          questions: cat.questions.map(q => {
+            if (q.id === qId) {
+              const options = q.options || [];
+              return {
+                ...q,
+                options: [...options, { id: `opt-${Date.now()}`, text: '', arText: '', value: 5 }]
+              };
+            }
+            return q;
+          })
+        };
+      }
+      return cat;
+    });
+    setEditingTemplate({ ...editingTemplate, categories: nextCats });
+  };
+
+  const updateOption = (catId: string, qId: string, optId: string, fields: Partial<QuestionOption>) => {
+    if (!editingTemplate) return;
+    const nextCats = editingTemplate.categories.map(cat => {
+      if (cat.id === catId) {
+        return {
+          ...cat,
+          questions: cat.questions.map(q => {
+            if (q.id === qId && q.options) {
+              return {
+                ...q,
+                options: q.options.map(opt => opt.id === optId ? { ...opt, ...fields } : opt)
+              };
+            }
+            return q;
+          })
+        };
+      }
+      return cat;
+    });
+    setEditingTemplate({ ...editingTemplate, categories: nextCats });
+  };
+
+  const removeOption = (catId: string, qId: string, optId: string) => {
+    if (!editingTemplate) return;
+    const nextCats = editingTemplate.categories.map(cat => {
+      if (cat.id === catId) {
+        return {
+          ...cat,
+          questions: cat.questions.map(q => {
+            if (q.id === qId && q.options) {
+              return {
+                ...q,
+                options: q.options.filter(opt => opt.id !== optId)
+              };
+            }
+            return q;
+          })
+        };
+      }
+      return cat;
+    });
+    setEditingTemplate({ ...editingTemplate, categories: nextCats });
+  };
+
   const handleSave = async () => {
     if (!editingTemplate) return;
     try {
@@ -177,10 +244,14 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
     }
   };
 
-  const filteredUsers = users.filter(u => {
+  const filteredRespondents = users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.role.toLowerCase().includes(userSearch.toLowerCase());
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
     return matchesSearch && matchesRole;
+  });
+
+  const filteredTargets = users.filter(u => {
+    return u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.role.toLowerCase().includes(userSearch.toLowerCase());
   });
 
   const calculateTotalCatWeight = () => editingTemplate?.categories.reduce((sum, c) => sum + (Number(c.weight) || 0), 0) || 0;
@@ -304,7 +375,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                          />
                       </div>
                       <div className="max-h-72 overflow-y-auto no-scrollbar border border-slate-100 rounded-2xl p-2 space-y-1">
-                         {filteredUsers.map(u => (
+                         {filteredRespondents.map(u => (
                             <button 
                                key={u.id}
                                onClick={() => {
@@ -335,7 +406,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                       </div>
                       <p className="text-[10px] font-medium text-slate-400 italic">Leave empty for self-assessment templates.</p>
                       <div className="max-h-[350px] overflow-y-auto no-scrollbar border border-slate-100 rounded-2xl p-2 space-y-1">
-                         {users.filter(u => u.role === UserRole.PLAYER).map(u => (
+                         {filteredTargets.map(u => (
                             <button 
                                key={u.id}
                                onClick={() => {
@@ -382,14 +453,14 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
           </div>
         </div>
       )}
-      {/* ... rest of showEditor code ... */}
+
       {showEditor && editingTemplate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-5xl h-[90vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             <header className={`p-6 md:p-8 border-b border-slate-100 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
               <div className={isRtl ? 'text-right' : ''}>
                 <h3 className="text-xl md:text-2xl font-bold text-slate-900">{editingTemplate.id ? t.editTemplate : t.addTemplate}</h3>
-                <p className="text-xs md:text-sm font-medium text-slate-400">{isRtl ? 'حدد المقاييس والأوزان والأسئلة لهذا الاستبيان.' : 'Define metrics, weights, and questions for this survey.'}</p>
+                <p className="text-xs md:text-sm font-medium text-slate-500 mt-1">{isRtl ? 'حدد المقاييس والأوزان والأسئلة لهذا الاستبيان.' : 'Define metrics, weights, and questions for this survey.'}</p>
               </div>
               <button onClick={() => setShowEditor(false)} className="p-2 hover:bg-slate-100 rounded-2xl transition-colors">
                 <X className="w-6 h-6 text-slate-400" />
@@ -536,7 +607,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                                          </div>
                                          <select 
                                             value={q.type}
-                                            onChange={(e) => updateQuestion(cat.id, q.id, { type: e.target.value as QuestionType, options: e.target.value === 'MULTIPLE_CHOICE' ? [] : undefined })}
+                                            onChange={(e) => updateQuestion(cat.id, q.id, { type: e.target.value as QuestionType, options: e.target.value === 'MULTIPLE_CHOICE' ? (q.options || []) : undefined })}
                                             className={`px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer ${isRtl ? 'text-right' : ''}`}
                                          >
                                             <option value="RATING">{t.ratingType}</option>
@@ -549,9 +620,51 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                                    </div>
 
                                    {q.type === 'MULTIPLE_CHOICE' && (
-                                     <div className="pl-4 border-l-2 border-emerald-100 space-y-3 mt-4">
+                                     <div className={`pl-4 border-l-2 border-emerald-100 space-y-4 mt-4 ${isRtl ? 'border-l-0 border-r-2 pr-4' : ''}`}>
                                         <div className={`flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
                                            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Options & Scoring</span>
+                                           <button 
+                                              onClick={() => addOption(cat.id, q.id)}
+                                              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-bold hover:bg-emerald-100 transition-colors"
+                                           >
+                                              <Plus className="w-3 h-3" /> {t.addOption}
+                                           </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                           {q.options?.map((opt) => (
+                                              <div key={opt.id} className={`flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                    <input 
+                                                       type="text" 
+                                                       value={opt.text} 
+                                                       onChange={(e) => updateOption(cat.id, q.id, opt.id, { text: e.target.value })}
+                                                       placeholder={t.optionLabel}
+                                                       className={`px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold ${isRtl ? 'text-right' : ''}`}
+                                                    />
+                                                    <input 
+                                                       type="text" 
+                                                       value={opt.arText} 
+                                                       onChange={(e) => updateOption(cat.id, q.id, opt.id, { arText: e.target.value })}
+                                                       placeholder={t.optionLabelAr}
+                                                       className={`px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold ${isRtl ? 'text-right' : ''}`}
+                                                    />
+                                                    <div className="relative">
+                                                       <input 
+                                                          type="number" 
+                                                          min="1" max="10"
+                                                          value={opt.value} 
+                                                          onChange={(e) => updateOption(cat.id, q.id, opt.id, { value: Number(e.target.value) })}
+                                                          placeholder={t.scoreValue}
+                                                          className={`w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-black ${isRtl ? 'text-right' : ''}`}
+                                                       />
+                                                       <span className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-[8px] font-black text-slate-400`}>SCORE</span>
+                                                    </div>
+                                                 </div>
+                                                 <button onClick={() => removeOption(cat.id, q.id, opt.id)} className="p-1.5 hover:bg-rose-100 rounded-lg text-rose-500 transition-colors">
+                                                    <X className="w-3.5 h-3.5" />
+                                                 </button>
+                                              </div>
+                                           ))}
                                         </div>
                                      </div>
                                    )}

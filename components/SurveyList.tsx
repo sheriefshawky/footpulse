@@ -185,14 +185,23 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                 <div key={cat.id} className="space-y-4">
                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-2">{isRtl ? cat.arName : cat.name}</h4>
                    <div className="space-y-3">
-                     {cat.questions.map(q => (
-                       <div key={q.id} className={`flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-2xl ${isRtl ? 'flex-row-reverse' : ''}`}>
-                         <span className="text-sm font-bold text-slate-700">{isRtl ? q.arText : q.text}</span>
-                         <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-emerald-600 shadow-sm">
-                           {selectedResponse.answers[q.id] || 0}/10
-                         </span>
-                       </div>
-                     ))}
+                     {cat.questions.map(q => {
+                       const score = selectedResponse.answers[q.id];
+                       // Try to find the matching choice text if it's a multiple choice question
+                       const selectedOption = q.options?.find(opt => opt.value === score);
+                       const displayText = selectedOption 
+                          ? (isRtl ? selectedOption.arText : selectedOption.text)
+                          : `${score}/10`;
+
+                       return (
+                         <div key={q.id} className={`flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-2xl ${isRtl ? 'flex-row-reverse' : ''}`}>
+                           <span className="text-sm font-bold text-slate-700">{isRtl ? q.arText : q.text}</span>
+                           <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-emerald-600 shadow-sm">
+                             {displayText}
+                           </span>
+                         </div>
+                       );
+                     })}
                    </div>
                 </div>
               ))}
