@@ -130,19 +130,12 @@ const Login: React.FC<Props> = ({ onLogin, lang, toggleLang }) => {
 
            {/* Quick Demo Access Grid */}
            <div className="mt-10 md:mt-12 pt-6 md:pt-8 border-t border-slate-800">
-              <p className={`text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4 text-center md:${isRtl ? 'text-right' : 'text-left'}`}>{t.demoPersonas}</p>
-              <div className="grid grid-cols-2 gap-2 md:gap-3">
-                 <button disabled={loading} onClick={() => loginAsDemo('admin@footpulse.app')} className="p-2 md:p-3 bg-slate-900 border border-slate-800 rounded-xl text-[10px] md:text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center gap-2 group">
+              <p className={`text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4 text-center md:${isRtl ? 'text-right' : 'text-left'}`}>
+                {lang === 'en' ? 'Demo Access' : 'وصول تجريبي'}
+              </p>
+              <div className="flex justify-center md:justify-start">
+                 <button disabled={loading} onClick={() => loginAsDemo('admin@footpulse.app')} className="w-full md:w-auto p-2 md:p-3 bg-slate-900 border border-slate-800 rounded-xl text-[10px] md:text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center md:justify-start gap-2 group">
                    <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full flex-shrink-0 group-hover:scale-150 transition-transform"></div> {t.admin}
-                 </button>
-                 <button disabled={loading} onClick={() => loginAsDemo('mike@footpulse.app')} className="p-2 md:p-3 bg-slate-900 border border-slate-800 rounded-xl text-[10px] md:text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center gap-2 group">
-                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0 group-hover:scale-150 transition-transform"></div> {t.coach}
-                 </button>
-                 <button disabled={loading} onClick={() => loginAsDemo('leo@footpulse.app')} className="p-2 md:p-3 bg-slate-900 border border-slate-800 rounded-xl text-[10px] md:text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center gap-2 group">
-                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0 group-hover:scale-150 transition-transform"></div> {t.player}
-                 </button>
-                 <button disabled={loading} onClick={() => loginAsDemo('senior@footpulse.app')} className="p-2 md:p-3 bg-slate-900 border border-slate-800 rounded-xl text-[10px] md:text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all flex items-center gap-2 group">
-                   <div className="w-1.5 h-1.5 bg-amber-500 rounded-full flex-shrink-0 group-hover:scale-150 transition-transform"></div> {t.guardian}
                  </button>
               </div>
            </div>
