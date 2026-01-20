@@ -24,6 +24,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
 
   // Filter logic
   const filteredAssignments = assignments.filter(a => {
+    // Basic permissions: Admin sees all, Others see only what they respond to
     if (!isAdmin && a.respondentId !== user.id) return false;
     
     const respondent = users.find(u => u.id === a.respondentId);
@@ -34,6 +35,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
       (respondent?.name || '').toLowerCase().includes(search.toLowerCase()) || 
       (target?.name || '').toLowerCase().includes(search.toLowerCase()) ||
       (template?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (template?.arName || '').toLowerCase().includes(search.toLowerCase()) ||
       (a.month || '').includes(search);
       
     return matchesSearch;
@@ -48,6 +50,8 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
     );
     if (res) {
       setSelectedResponse(res);
+    } else {
+      alert(isRtl ? "لم يتم العثور على بيانات الاستجابة." : "Response data not found.");
     }
   };
 
@@ -72,7 +76,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
             placeholder={isRtl ? 'بحث حسب العضو أو الشهر...' : 'Search by member, month...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500`}
+            className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm`}
           />
         </div>
       </div>
@@ -82,6 +86,8 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
           const template = templates.find(temp => temp.id === assignment.templateId);
           const respondent = users.find(u => u.id === assignment.respondentId);
           const target = users.find(u => u.id === assignment.targetId);
+          
+          // If data is still loading or partially missing, skip rendering this card
           if (!template || !target || !respondent) return null;
 
           const isCompleted = assignment.status === 'COMPLETED';
@@ -95,7 +101,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                 <div className={`p-3 rounded-2xl ${isCompleted ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Timer className="w-5 h-5" />}
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className={`flex gap-2 items-center ${isRtl ? 'flex-row-reverse' : ''}`}>
                   <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2.5 py-1 rounded-full">{assignment.month}</span>
                   {isCompleted ? (
                     <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest bg-emerald-100 px-2.5 py-1 rounded-full">{isRtl ? 'مكتمل' : 'Completed'}</span>
@@ -105,18 +111,20 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-slate-900 mb-2 leading-tight">{isRtl ? template.arName : template.name}</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-4 leading-tight min-h-[3rem] line-clamp-2">
+                {isRtl ? template.arName : template.name}
+              </h3>
               
               <div className="space-y-3 mb-6">
                 <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                   <img src={respondent.avatar} className="w-5 h-5 rounded-full border border-slate-100" />
-                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                   <img src={respondent.avatar || `https://ui-avatars.com/api/?name=${respondent.name}`} className="w-5 h-5 rounded-full border border-slate-100" />
+                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
                      {isRtl ? 'من:' : 'By:'} {respondent.name}
                    </span>
                 </div>
                 <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                   <img src={target.avatar} className="w-5 h-5 rounded-full border border-slate-100" />
-                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                   <img src={target.avatar || `https://ui-avatars.com/api/?name=${target.name}`} className="w-5 h-5 rounded-full border border-slate-100" />
+                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
                      {isRtl ? 'حول:' : 'About:'} {target.name}
                    </span>
                 </div>
@@ -124,7 +132,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
 
               <div className={`pt-4 border-t border-slate-100 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
                 <p className="text-[10px] font-medium text-slate-400 italic">
-                  {isAdmin && isCompleted ? (isRtl ? 'انقر لعرض النتائج' : 'Click to see results') : (isRtl ? 'بانتظار الإكمال' : 'Awaiting completion')}
+                  {isCompleted ? (isRtl ? 'انقر لعرض النتائج' : 'Click to see results') : (isRtl ? 'بانتظار الإكمال' : 'Awaiting completion')}
                 </p>
                 {isCompleted ? (
                   <button
@@ -190,7 +198,9 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
               ))}
             </div>
             <footer className="p-6 border-t border-slate-100 bg-slate-50 flex justify-center">
-              <button onClick={() => setSelectedResponse(null)} className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 shadow-sm">Close</button>
+              <button onClick={() => setSelectedResponse(null)} className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 shadow-sm">
+                {isRtl ? 'إغلاق' : 'Close'}
+              </button>
             </footer>
           </div>
         </div>

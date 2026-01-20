@@ -153,6 +153,52 @@ class SurveySubmit(BaseModel):
     answers: Dict[str, int]
     weighted_score: float
 
+# --- HELPER MAPPERS ---
+def map_user(u: User):
+    return {
+        "id": u.id,
+        "name": u.name,
+        "email": u.email,
+        "role": u.role,
+        "mobile": u.mobile,
+        "avatar": u.avatar,
+        "trainerId": u.trainer_id,
+        "playerId": u.player_id
+    }
+
+def map_template(t: SurveyTemplateModel):
+    return {
+        "id": t.id,
+        "name": t.name,
+        "arName": t.ar_name,
+        "description": t.description,
+        "arDescription": t.ar_description,
+        "categories": t.categories
+    }
+
+def map_assignment(a: SurveyAssignment):
+    return {
+        "id": a.id,
+        "templateId": a.template_id,
+        "assignerId": a.assigner_id,
+        "respondentId": a.respondent_id,
+        "targetId": a.target_id,
+        "month": a.month,
+        "status": a.status
+    }
+
+def map_response(r: SurveyResponse):
+    return {
+        "id": r.id,
+        "templateId": r.template_id,
+        "userId": r.user_id,
+        "targetPlayerId": r.target_player_id,
+        "month": r.month,
+        "date": r.date.isoformat(),
+        "answers": r.answers,
+        "weightedScore": r.weighted_score
+    }
+
 # --- ROUTES ---
 @app.post("/auth/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -164,25 +210,18 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role,
-            "mobile": user.mobile,
-            "avatar": user.avatar,
-            "trainerId": user.trainer_id,
-            "playerId": user.player_id
-        }
+        "user": map_user(user)
     }
 
 @app.get("/users")
 def list_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
-        return db.query(User).all()
+        users = db.query(User).all()
     elif current_user.role == UserRole.TRAINER:
-        return db.query(User).filter((User.trainer_id == current_user.id) | (User.id == current_user.id)).all()
-    return [current_user]
+        users = db.query(User).filter((User.trainer_id == current_user.id) | (User.id == current_user.id)).all()
+    else:
+        users = [current_user]
+    return [map_user(u) for u in users]
 
 @app.post("/users")
 def create_user(user_data: UserCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -202,7 +241,7 @@ def create_user(user_data: UserCreate, current_user: User = Depends(get_current_
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return db_user
+    return map_user(db_user)
 
 @app.patch("/users/{user_id}/reset-password")
 def admin_reset_password(user_id: str, data: AdminResetPassword, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -217,13 +256,16 @@ def admin_reset_password(user_id: str, data: AdminResetPassword, current_user: U
 
 @app.get("/templates")
 def list_templates(db: Session = Depends(get_db)):
-    return db.query(SurveyTemplateModel).all()
+    templates = db.query(SurveyTemplateModel).all()
+    return [map_template(t) for t in templates]
 
 @app.get("/assignments")
 def get_assignments(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
-        return db.query(SurveyAssignment).all()
-    return db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all()
+        assignments = db.query(SurveyAssignment).all()
+    else:
+        assignments = db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all()
+    return [map_assignment(a) for a in assignments]
 
 @app.post("/assignments")
 def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -261,10 +303,12 @@ def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_
 @app.get("/responses")
 def get_responses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
-        return db.query(SurveyResponse).all()
-    return db.query(SurveyResponse).filter(
-        (SurveyResponse.user_id == current_user.id) | (SurveyResponse.target_player_id == current_user.id)
-    ).all()
+        responses = db.query(SurveyResponse).all()
+    else:
+        responses = db.query(SurveyResponse).filter(
+            (SurveyResponse.user_id == current_user.id) | (SurveyResponse.target_player_id == current_user.id)
+        ).all()
+    return [map_response(r) for r in responses]
 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -289,7 +333,7 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
         assignment.status = 'COMPLETED'
     
     db.commit()
-    return db_res
+    return map_response(db_res)
 
 @app.on_event("startup")
 def seed_data():
