@@ -223,11 +223,41 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @app.get("/users")
 def list_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
-        users = db.query(User).all()
-    elif current_user.role == UserRole.TRAINER:
-        users = db.query(User).filter((User.trainer_id == current_user.id) | (User.id == current_user.id)).all()
-    else:
-        users = [current_user]
+        return [map_user(u) for u in db.query(User).all()]
+    
+    user_ids = {current_user.id}
+    
+    # Logic to include relevant users based on role and assignments
+    if current_user.role == UserRole.TRAINER:
+        # Include their roster
+        roster = db.query(User).filter(User.trainer_id == current_user.id).all()
+        for u in roster: user_ids.add(u.id)
+        # Include anyone they are assigned to evaluate
+        assignments = db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all()
+        for a in assignments:
+            if a.target_id: user_ids.add(a.target_id)
+            
+    elif current_user.role == UserRole.PLAYER:
+        if current_user.trainer_id: user_ids.add(current_user.trainer_id)
+        # Include their guardian
+        guardians = db.query(User).filter(User.player_id == current_user.id).all()
+        for g in guardians: user_ids.add(g.id)
+            
+    elif current_user.role == UserRole.GUARDIAN:
+        if current_user.player_id:
+            user_ids.add(current_user.player_id)
+            child = db.query(User).filter(User.id == current_user.player_id).first()
+            if child and child.trainer_id:
+                user_ids.add(child.trainer_id)
+
+    # General rule: you can see anyone involved in an assignment with you
+    # (either as a target of yours or a respondent evaluating you)
+    for a in db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all():
+        if a.target_id: user_ids.add(a.target_id)
+    for a in db.query(SurveyAssignment).filter(SurveyAssignment.target_id == current_user.id).all():
+        user_ids.add(a.respondent_id)
+
+    users = db.query(User).filter(User.id.in_(list(user_ids))).all()
     return [map_user(u) for u in users]
 
 @app.post("/users")

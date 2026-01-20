@@ -90,7 +90,8 @@ export const translations = {
     optionLabel: "Choice Label",
     optionLabelAr: "Choice (Arabic)",
     scoreValue: "Score Value",
-    selectOption: "Select an option"
+    selectOption: "Select an option",
+    assessmentAbout: "Assessment About"
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -182,6 +183,7 @@ export const translations = {
     optionLabel: "نص الخيار",
     optionLabelAr: "الخيار (بالعربي)",
     scoreValue: "قيمة الدرجة",
-    selectOption: "اختر خياراً"
+    selectOption: "اختر خياراً",
+    assessmentAbout: "تقييم حول"
   }
 };

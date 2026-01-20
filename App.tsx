@@ -296,6 +296,7 @@ const App: React.FC = () => {
               template={activeSurvey.template} 
               targetId={activeSurvey.targetId} 
               currentUser={currentUser}
+              users={users}
               onSubmit={submitSurvey}
               onCancel={() => setActiveSurvey(null)}
               lang={lang}
@@ -363,7 +364,6 @@ const App: React.FC = () => {
                       required
                       type="password" 
                       value={passData.current}
-                      // Fixed: use setPassData instead of setFormData
                       onChange={(e) => setPassData({...passData, current: e.target.value})}
                       placeholder="••••••••"
                       className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
@@ -379,7 +379,6 @@ const App: React.FC = () => {
                       required
                       type="password" 
                       value={passData.new}
-                      // Fixed: use setPassData instead of setFormData
                       onChange={(e) => setPassData({...passData, new: e.target.value})}
                       placeholder="••••••••"
                       className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
@@ -395,7 +394,6 @@ const App: React.FC = () => {
                       required
                       type="password" 
                       value={passData.confirm}
-                      // Fixed: use setPassData instead of setFormData
                       onChange={(e) => setPassData({...passData, confirm: e.target.value})}
                       placeholder="••••••••"
                       className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}

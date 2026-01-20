@@ -1,19 +1,20 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, SurveyTemplate, SurveyResponse, Category, Language } from '../types';
-import { CheckCircle, AlertCircle, ArrowLeft, Send, Check } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowLeft, Send, Check, User as UserIcon } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
   template: SurveyTemplate;
   targetId: string;
   currentUser: User;
+  users: User[];
   onSubmit: (response: SurveyResponse) => void;
   onCancel: () => void;
   lang: Language;
 }
 
-const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, onSubmit, onCancel, lang }) => {
+const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, onSubmit, onCancel, lang }) => {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
 
@@ -21,6 +22,11 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, onSubmit
   const isRtl = lang === 'ar';
   const categories = template.categories;
   const currentCategory = categories[currentCategoryIndex];
+
+  const targetUser = useMemo(() => 
+    users.find(u => u.id === targetId),
+    [users, targetId]
+  );
 
   const handleScoreChange = (qId: string, score: number) => {
     setAnswers(prev => ({ ...prev, [qId]: score }));
@@ -32,11 +38,10 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, onSubmit
       let categoryRawScore = 0;
       let totalQuestionWeights = 0;
       category.questions.forEach(q => {
-        const score = answers[q.id] || 0; // Defaulting to 0 if not answered, though we block submission
+        const score = answers[q.id] || 0; 
         categoryRawScore += (score / 10) * q.weight;
         totalQuestionWeights += q.weight;
       });
-      // categoryRawScore is already a weighted percentage within the category
       totalWeightedScore += (categoryRawScore * category.weight) / 100;
     });
     return Math.round(totalWeightedScore);
@@ -74,14 +79,35 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, onSubmit
         </div>
 
         <div className="p-6 md:p-10">
-          <div className={`flex items-center justify-between mb-10 ${isRtl ? 'flex-row-reverse' : ''}`}>
-            <button onClick={onCancel} className={`flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors font-bold text-sm ${isRtl ? 'flex-row-reverse' : ''}`}>
+          <div className={`flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 ${isRtl ? 'md:flex-row-reverse' : ''}`}>
+            <button onClick={onCancel} className={`flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors font-bold text-sm self-start ${isRtl ? 'flex-row-reverse' : ''}`}>
               <ArrowLeft className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
               {t.exitSurvey}
             </button>
+            
+            {/* Target Info Display - More Prominent in Survey Form */}
+            {targetUser && (
+              <div className={`flex items-center gap-4 bg-slate-900 px-6 py-3 rounded-2xl shadow-xl shadow-slate-950/20 border border-slate-800 transition-all ${isRtl ? 'flex-row-reverse' : ''}`}>
+                <div className="relative">
+                   <img 
+                    src={targetUser.avatar || `https://ui-avatars.com/api/?name=${targetUser.name}`} 
+                    alt="" 
+                    className="w-12 h-12 rounded-xl border-2 border-slate-700 shadow-sm object-cover" 
+                   />
+                   <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-1 border-2 border-slate-900">
+                      <UserIcon className="w-3 h-3 text-white" />
+                   </div>
+                </div>
+                <div className={isRtl ? 'text-right' : 'text-left'}>
+                  <p className="text-[9px] font-black uppercase text-emerald-400 tracking-[0.2em]">{t.assessmentAbout}</p>
+                  <p className="text-lg font-black text-white leading-tight mt-0.5">{targetUser.name}</p>
+                </div>
+              </div>
+            )}
+
             <div className={isRtl ? 'text-left' : 'text-right'}>
               <p className="text-[10px] font-black uppercase text-emerald-500 tracking-widest mb-1">{t.step} {currentCategoryIndex + 1} {t.of} {categories.length}</p>
-              <h4 className="text-sm font-bold text-slate-900">{isRtl ? template.arName : template.name}</h4>
+              <h4 className="text-xs font-bold text-slate-400">{isRtl ? template.arName : template.name}</h4>
             </div>
           </div>
 

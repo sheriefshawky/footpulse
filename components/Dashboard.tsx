@@ -17,7 +17,7 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { Activity, Users, ClipboardCheck, Calendar, Trophy, CheckCircle2, Circle } from 'lucide-react';
+import { Activity, Users, ClipboardCheck, Calendar, Trophy, CheckCircle2, Circle, User as UserIcon, ArrowRight } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -137,24 +137,43 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
             {pendingAssignments.length > 0 ? (
                pendingAssignments.map(a => {
                   const template = templates.find(t => t.id === a.templateId);
+                  const targetUser = users.find(u => u.id === a.targetId);
                   if (!template) return null;
                   return (
-                    <div key={a.id} className={`p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-start gap-3 md:gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      <div className="bg-emerald-500 p-2 rounded-lg text-white flex-shrink-0">
-                        <ClipboardCheck className="w-4 h-4 md:w-5 md:h-5" />
+                    <div key={a.id} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-4 hover:border-emerald-200 transition-colors">
+                      {/* Prominent Target Header */}
+                      <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                        <img 
+                           src={targetUser?.avatar || `https://ui-avatars.com/api/?name=${targetUser?.name || 'User'}`} 
+                           className="w-10 h-10 rounded-xl object-cover shadow-sm border border-slate-200" 
+                           alt=""
+                        />
+                        <div className={isRtl ? 'text-right' : 'text-left'}>
+                           <p className="text-[8px] font-black uppercase text-emerald-500 tracking-[0.1em]">{t.assessmentAbout}</p>
+                           <p className="text-sm font-black text-slate-900">{targetUser?.name || 'Unknown User'}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-xs md:text-sm font-bold text-slate-900 truncate">{isRtl ? template.arName : template.name}</h4>
-                        <p className={`text-[10px] md:text-xs font-medium text-emerald-700 mt-0.5 ${isRtl ? 'text-right' : ''}`}>
-                          {isRtl ? `مستحق لـ: ${a.month}` : `Due for: ${a.month}`}
-                        </p>
-                        <button 
-                          onClick={() => onStartSurvey(template, a.targetId)}
-                          className="mt-3 px-3 py-1.5 md:px-4 md:py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] md:text-xs font-bold rounded-lg transition-colors whitespace-nowrap"
-                        >
-                          {t.startAssessment}
-                        </button>
+
+                      <div className="bg-slate-50 p-3 rounded-xl space-y-1">
+                        <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                           <ClipboardCheck className="w-3.5 h-3.5 text-slate-400" />
+                           <h4 className="text-[11px] font-bold text-slate-700 truncate">{isRtl ? template.arName : template.name}</h4>
+                        </div>
+                        <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                           <p className="text-[10px] font-medium text-slate-500">
+                             {isRtl ? `مستحق لـ: ${a.month}` : `Due for: ${a.month}`}
+                           </p>
+                        </div>
                       </div>
+
+                      <button 
+                        onClick={() => onStartSurvey(template, a.targetId)}
+                        className={`w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${isRtl ? 'flex-row-reverse' : ''}`}
+                      >
+                        {t.startAssessment}
+                        <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                      </button>
                     </div>
                   );
                })
