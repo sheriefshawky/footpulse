@@ -137,6 +137,9 @@ class UserCreate(BaseModel):
     trainer_id: Optional[str] = None
     player_id: Optional[str] = None
 
+class AdminResetPassword(BaseModel):
+    new_password: str
+
 class AssignmentCreate(BaseModel):
     template_id: str
     respondent_ids: List[str]
@@ -201,6 +204,17 @@ def create_user(user_data: UserCreate, current_user: User = Depends(get_current_
     db.refresh(db_user)
     return db_user
 
+@app.patch("/users/{user_id}/reset-password")
+def admin_reset_password(user_id: str, data: AdminResetPassword, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.password_hash = get_password_hash(data.new_password)
+    db.commit()
+    return {"detail": "Password reset successfully"}
+
 @app.get("/templates")
 def list_templates(db: Session = Depends(get_db)):
     return db.query(SurveyTemplateModel).all()
@@ -217,16 +231,15 @@ def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_
         raise HTTPException(status_code=403, detail="Admin only")
     
     new_assignments = []
-    # If no targets provided, each respondent evaluates themselves (common for self-assessments)
-    targets = data.target_ids if data.target_ids else [None]
+    targets = data.target_ids if data.target_ids and len(data.target_ids) > 0 else [None]
     
     for r_id in data.respondent_ids:
         for t_id in targets:
-            # Avoid duplicate assignments for same user, template, target, month
+            final_target = t_id if t_id else r_id
             existing = db.query(SurveyAssignment).filter(
                 SurveyAssignment.template_id == data.template_id,
                 SurveyAssignment.respondent_id == r_id,
-                SurveyAssignment.target_id == t_id,
+                SurveyAssignment.target_id == final_target,
                 SurveyAssignment.month == data.month
             ).first()
             if not existing:
@@ -235,7 +248,7 @@ def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_
                     template_id=data.template_id,
                     assigner_id=current_user.id,
                     respondent_id=r_id,
-                    target_id=t_id or r_id,
+                    target_id=final_target,
                     month=data.month,
                     status='PENDING'
                 )
@@ -266,7 +279,6 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
         date=datetime.utcnow()
     )
     db.add(db_res)
-    # Update assignment status if exists
     assignment = db.query(SurveyAssignment).filter(
         SurveyAssignment.template_id == res.template_id,
         SurveyAssignment.respondent_id == current_user.id,

@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, Language } from '../types';
-import { UserPlus, Search, Mail, Phone, X, UserCheck, Lock, Edit3 } from 'lucide-react';
+import { UserPlus, Search, Mail, Phone, X, UserCheck, Lock, Edit3, Key } from 'lucide-react';
 import { translations } from '../translations';
 import { api } from '../api';
 
 interface Props {
   users: User[];
-  onRegister: (u: User) => void;
+  onRegister: () => void;
   lang: Language;
 }
 
@@ -15,8 +15,10 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
   const t = translations[lang];
   const isRtl = lang === 'ar';
   const [showModal, setShowModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [filter, setFilter] = useState('');
+  const [selectedUserForReset, setSelectedUserForReset] = useState<User | null>(null);
   
   const [formData, setFormData] = useState({
     id: '',
@@ -28,6 +30,11 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
     confirmPassword: '',
     trainerId: '',
     playerId: ''
+  });
+
+  const [resetData, setResetData] = useState({
+    newPassword: '',
+    confirmPassword: ''
   });
 
   const filteredUsers = users.filter(u => 
@@ -70,6 +77,12 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
     setShowModal(true);
   };
 
+  const openResetPasswordModal = (user: User) => {
+    setSelectedUserForReset(user);
+    setResetData({ newPassword: '', confirmPassword: '' });
+    setShowResetModal(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.mobile) return;
@@ -79,18 +92,9 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
       return;
     }
 
-    if (formData.role === UserRole.PLAYER && !formData.trainerId) {
-      alert("Please select a trainer for the player.");
-      return;
-    }
-    if (formData.role === UserRole.GUARDIAN && !formData.playerId) {
-      alert("Please assign a player to the guardian.");
-      return;
-    }
-
     try {
       if (editMode) {
-        const updatedUser = await api.put(`/users/${formData.id}`, {
+        await api.patch(`/users/${formData.id}`, {
           name: formData.name,
           email: formData.email,
           mobile: formData.mobile,
@@ -99,9 +103,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           player_id: formData.playerId || null
         });
         alert(t.userUpdated);
-        window.location.reload(); // Quick refresh to update user list
       } else {
-        const payload = {
+        await api.post('/users', {
           name: formData.name,
           email: formData.email,
           mobile: formData.mobile,
@@ -109,13 +112,32 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           password: formData.password,
           trainer_id: formData.trainerId || null,
           player_id: formData.playerId || null
-        };
-        const createdUser = await api.post('/users', payload);
-        onRegister(createdUser);
+        });
+        alert("Member registered successfully");
       }
+      onRegister();
       setShowModal(false);
     } catch (err: any) {
       alert(err.message || "Operation failed");
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserForReset) return;
+    if (resetData.newPassword !== resetData.confirmPassword) {
+      alert(t.passwordsDoNotMatch);
+      return;
+    }
+
+    try {
+      await api.patch(`/users/${selectedUserForReset.id}/reset-password`, {
+        new_password: resetData.newPassword
+      });
+      alert(t.passwordUpdated);
+      setShowResetModal(false);
+    } catch (err: any) {
+      alert(err.message || "Reset failed");
     }
   };
 
@@ -204,13 +226,22 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                     {!u.trainerId && !u.playerId && <span className="text-[10px] text-slate-300 italic font-medium">{isRtl ? 'لا يوجد' : 'None'}</span>}
                   </td>
                   <td className={`px-6 py-4 ${isRtl ? 'text-left' : 'text-right'}`}>
-                    <button 
-                      onClick={() => openEditModal(u)}
-                      className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-emerald-600 uppercase tracking-widest transition-colors"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      {isRtl ? 'تعديل' : 'Edit'}
-                    </button>
+                    <div className="flex items-center justify-end gap-3">
+                      <button 
+                        onClick={() => openResetPasswordModal(u)}
+                        className="p-2 hover:bg-amber-50 rounded-lg text-amber-500 transition-colors"
+                        title="Force Reset Password"
+                      >
+                        <Key className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => openEditModal(u)}
+                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
+                        title="Edit User"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -218,6 +249,51 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           </table>
         </div>
       </div>
+
+      {/* Password Reset Modal */}
+      {showResetModal && selectedUserForReset && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className={`p-6 border-b border-slate-100 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
+              <h3 className="text-xl font-bold text-slate-900">{isRtl ? 'إعادة تعيين كلمة المرور' : 'Reset Password'}</h3>
+              <button onClick={() => setShowResetModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                <X className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+            <form onSubmit={handleResetPassword} className={`p-6 space-y-4 ${isRtl ? 'text-right' : ''}`}>
+              <p className="text-sm font-medium text-slate-500">
+                {isRtl ? `تعيين كلمة مرور جديدة لـ ${selectedUserForReset.name}` : `Set a new password for ${selectedUserForReset.name}`}
+              </p>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.newPassword}</label>
+                <input 
+                  required
+                  type="password" 
+                  value={resetData.newPassword}
+                  onChange={(e) => setResetData({...resetData, newPassword: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="••••••••"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.confirmPassword}</label>
+                <input 
+                  required
+                  type="password" 
+                  value={resetData.confirmPassword}
+                  onChange={(e) => setResetData({...resetData, confirmPassword: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="••••••••"
+                />
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setShowResetModal(false)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl text-sm">Cancel</button>
+                <button type="submit" className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-500/20">Update Password</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -300,9 +376,6 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                           className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
                         />
                       </div>
-                      {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                        <p className="text-[10px] text-rose-500 font-bold px-1">{t.passwordsDoNotMatch}</p>
-                      )}
                     </div>
                   </>
                 )}

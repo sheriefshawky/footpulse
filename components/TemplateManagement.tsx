@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SurveyTemplate, Category, Question, QuestionOption, QuestionType, Language, User, UserRole } from '../types';
-import { Plus, Edit3, Trash2, X, ChevronDown, ChevronUp, Save, Layout, Send, HelpCircle, Check, Search } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, ChevronDown, ChevronUp, Save, Layout, Send, HelpCircle, Check, Search, Filter } from 'lucide-react';
 import { translations } from '../translations';
 import { api } from '../api';
 
@@ -26,6 +26,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
   const [selectedRespondents, setSelectedRespondents] = useState<Set<string>>(new Set());
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
   const [userSearch, setUserSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
 
   const emptyTemplate = (): SurveyTemplate => ({
     id: '',
@@ -93,7 +94,6 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
     setEditingTemplate({ ...editingTemplate, categories: nextCats });
   };
 
-  // Fix: Added missing removeCategory function
   const removeCategory = (catId: string) => {
     if (!editingTemplate) return;
     const nextCats = editingTemplate.categories.filter(cat => cat.id !== catId);
@@ -131,7 +131,6 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
     setEditingTemplate({ ...editingTemplate, categories: nextCats });
   };
 
-  // Fix: Added missing removeQuestion function
   const removeQuestion = (catId: string, qId: string) => {
     if (!editingTemplate) return;
     const nextCats = editingTemplate.categories.map(cat => {
@@ -178,7 +177,11 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
     }
   };
 
-  const filteredUsers = users.filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.role.toLowerCase().includes(userSearch.toLowerCase()));
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.role.toLowerCase().includes(userSearch.toLowerCase());
+    const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
 
   const calculateTotalCatWeight = () => editingTemplate?.categories.reduce((sum, c) => sum + (Number(c.weight) || 0), 0) || 0;
   const calculateTotalQWeight = (cat: Category) => cat.questions.reduce((sum, q) => sum + (Number(q.weight) || 0), 0) || 0;
@@ -246,7 +249,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
       {/* Assignment Modal */}
       {showAssignModal && assigningTemplate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-5xl max-h-[95vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
              <header className={`p-6 md:p-8 border-b border-slate-100 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
                 <div>
                    <h3 className="text-2xl font-black text-slate-900">{isRtl ? 'توليد وتعيين استبيان' : 'Assign & Generate Surveys'}</h3>
@@ -258,14 +261,30 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
              </header>
 
              <div className="flex-1 overflow-y-auto p-6 md:p-10 no-scrollbar space-y-8">
-                <section className="space-y-4">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'شهر التقييم' : 'Assessment Month'}</label>
-                   <input 
-                      type="month" 
-                      value={assignMonth} 
-                      onChange={(e) => setAssignMonth(e.target.value)}
-                      className="w-full max-w-xs px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                   />
+                <section className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+                   <div className="w-full md:w-auto">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">{isRtl ? 'شهر التقييم' : 'Assessment Month'}</label>
+                      <input 
+                         type="month" 
+                         value={assignMonth} 
+                         onChange={(e) => setAssignMonth(e.target.value)}
+                         className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                   </div>
+                   <div className="flex-1 w-full">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">{isRtl ? 'تصفية حسب الدور' : 'Filter by Role'}</label>
+                      <div className="flex flex-wrap gap-2">
+                         {['ALL', UserRole.ADMIN, UserRole.TRAINER, UserRole.PLAYER, UserRole.GUARDIAN].map(r => (
+                           <button 
+                             key={r} 
+                             onClick={() => setRoleFilter(r as any)}
+                             className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${roleFilter === r ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                           >
+                             {r === 'ALL' ? (isRtl ? 'الكل' : 'All') : r}
+                           </button>
+                         ))}
+                      </div>
+                   </div>
                 </section>
 
                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -281,10 +300,10 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                             placeholder="Search users..." 
                             value={userSearch} 
                             onChange={(e) => setUserSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none"
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                          />
                       </div>
-                      <div className="max-h-64 overflow-y-auto no-scrollbar border border-slate-100 rounded-2xl p-2 space-y-1">
+                      <div className="max-h-72 overflow-y-auto no-scrollbar border border-slate-100 rounded-2xl p-2 space-y-1">
                          {filteredUsers.map(u => (
                             <button 
                                key={u.id}
@@ -315,7 +334,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                          <span className="text-[10px] font-black text-blue-600 uppercase">{selectedTargets.size} selected</span>
                       </div>
                       <p className="text-[10px] font-medium text-slate-400 italic">Leave empty for self-assessment templates.</p>
-                      <div className="max-h-[310px] overflow-y-auto no-scrollbar border border-slate-100 rounded-2xl p-2 space-y-1">
+                      <div className="max-h-[350px] overflow-y-auto no-scrollbar border border-slate-100 rounded-2xl p-2 space-y-1">
                          {users.filter(u => u.role === UserRole.PLAYER).map(u => (
                             <button 
                                key={u.id}
@@ -342,19 +361,19 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                 </section>
              </div>
 
-             <footer className="p-8 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+             <footer className="p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                    <HelpCircle className="w-5 h-5 text-slate-400" />
                    <p className="text-[10px] font-medium text-slate-500 max-w-sm">
                       Each respondent will receive a pending survey for each selected target for the month of {assignMonth}.
                    </p>
                 </div>
-                <div className="flex gap-3">
-                   <button onClick={() => setShowAssignModal(false)} className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600">Cancel</button>
+                <div className="flex gap-3 w-full md:w-auto">
+                   <button onClick={() => setShowAssignModal(false)} className="flex-1 md:flex-none px-8 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600">Cancel</button>
                    <button 
                       onClick={handleFinalizeAssignment}
                       disabled={selectedRespondents.size === 0}
-                      className="px-10 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-emerald-500/20 transition-all flex items-center gap-2"
+                      className="flex-1 md:flex-none px-10 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
                    >
                       <Send className="w-4 h-4" /> Generate {selectedRespondents.size * (selectedTargets.size || 1)} Surveys
                    </button>
@@ -363,7 +382,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
           </div>
         </div>
       )}
-
+      {/* ... rest of showEditor code ... */}
       {showEditor && editingTemplate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-5xl h-[90vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">

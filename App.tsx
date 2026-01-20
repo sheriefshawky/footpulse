@@ -99,7 +99,7 @@ const App: React.FC = () => {
   const sidebarItems = useMemo(() => {
     const items = [
       { id: 'dashboard', label: t.dashboard, icon: <LayoutDashboard className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
-      { id: 'surveys', label: t.surveys, icon: <ClipboardList className="w-5 h-5" />, roles: [UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
+      { id: 'surveys', label: t.surveys, icon: <ClipboardList className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'analytics', label: t.analytics, icon: <TrendingUp className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'users', label: t.users, icon: <Users className="w-5 h-5" />, roles: [UserRole.ADMIN] },
       { id: 'templates', label: t.templates, icon: <FileText className="w-5 h-5" />, roles: [UserRole.ADMIN] },
@@ -124,7 +124,7 @@ const App: React.FC = () => {
         answers: response.answers,
         weighted_score: response.weightedScore
       });
-      refreshData();
+      await refreshData();
       setActiveSurvey(null);
       setActiveTab('dashboard');
     } catch (err) {
@@ -363,6 +363,7 @@ const App: React.FC = () => {
                       required
                       type="password" 
                       value={passData.current}
+                      // Fixed: use setPassData instead of setFormData
                       onChange={(e) => setPassData({...passData, current: e.target.value})}
                       placeholder="••••••••"
                       className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
@@ -378,6 +379,7 @@ const App: React.FC = () => {
                       required
                       type="password" 
                       value={passData.new}
+                      // Fixed: use setPassData instead of setFormData
                       onChange={(e) => setPassData({...passData, new: e.target.value})}
                       placeholder="••••••••"
                       className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
@@ -393,6 +395,7 @@ const App: React.FC = () => {
                       required
                       type="password" 
                       value={passData.confirm}
+                      // Fixed: use setPassData instead of setFormData
                       onChange={(e) => setPassData({...passData, confirm: e.target.value})}
                       placeholder="••••••••"
                       className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm font-medium`}
