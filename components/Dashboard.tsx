@@ -138,7 +138,8 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
                pendingAssignments.map(a => {
                   const template = templates.find(t => t.id === a.templateId);
                   const targetUser = users.find(u => u.id === a.targetId);
-                  const isCurrentMonth = a.month === currentMonth;
+                  const isFutureMonth = a.month > currentMonth;
+                  const canStart = !isFutureMonth;
                   
                   if (!template) return null;
                   return (
@@ -163,21 +164,21 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
                         </div>
                         <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                           <p className={`text-[10px] font-medium ${isCurrentMonth ? 'text-slate-500' : 'text-rose-500'}`}>
+                           <p className={`text-[10px] font-medium ${!isFutureMonth ? 'text-slate-500' : 'text-rose-500'}`}>
                              {isRtl ? `مستحق لـ: ${a.month}` : `Due for: ${a.month}`}
-                             {!isCurrentMonth && ` (${isRtl ? 'ليس الشهر الحالي' : 'Not current month'})`}
+                             {isFutureMonth && ` (${isRtl ? 'مستقبلي' : 'Future month'})`}
                            </p>
                         </div>
                       </div>
 
                       <button 
-                        disabled={!isCurrentMonth}
+                        disabled={!canStart}
                         onClick={() => onStartSurvey(template, a.targetId)}
-                        className={`w-full py-3 ${isCurrentMonth ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg' : 'bg-slate-200 text-slate-400 cursor-not-allowed'} text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${isRtl ? 'flex-row-reverse' : ''}`}
+                        className={`w-full py-3 ${canStart ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg' : 'bg-slate-200 text-slate-400 cursor-not-allowed'} text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${isRtl ? 'flex-row-reverse' : ''}`}
                       >
-                        {!isCurrentMonth && <Lock className="w-3.5 h-3.5" />}
+                        {!canStart && <Lock className="w-3.5 h-3.5" />}
                         {t.startAssessment}
-                        {isCurrentMonth && <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />}
+                        {canStart && <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />}
                       </button>
                     </div>
                   );

@@ -346,9 +346,9 @@ def create_template(data: TemplateCreateUpdate, current_user: User = Depends(get
     db_t = SurveyTemplateModel(
         id=new_id,
         name=data.name,
-        ar_name=data.arName,
+        ar_name=data.ar_name,
         description=data.description,
-        ar_description=data.arDescription,
+        ar_description=data.ar_description,
         categories=data.categories
     )
     db.add(db_t)
@@ -365,9 +365,9 @@ def update_template(template_id: str, data: TemplateCreateUpdate, current_user: 
         raise HTTPException(status_code=404, detail="Template not found")
     
     db_t.name = data.name
-    db_t.ar_name = data.arName
+    db_t.ar_name = data.ar_name
     db_t.description = data.description
-    db_t.ar_description = data.arDescription
+    db_t.ar_description = data.ar_description
     db_t.categories = data.categories
     
     db.commit()
@@ -474,8 +474,10 @@ def get_responses(current_user: User = Depends(get_current_user), db: Session = 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     current_month_str = datetime.utcnow().strftime("%Y-%m")
-    if res.month != current_month_str and current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=400, detail="Surveys can only be submitted for the current month")
+    
+    # Restriction: Non-admins cannot submit surveys for future months
+    if res.month > current_month_str and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail="Surveys cannot be submitted for future months")
 
     db_res = SurveyResponse(
         id=f"sr-{os.urandom(4).hex()}",
@@ -539,31 +541,64 @@ def setup_logic():
     except Exception:
         db.rollback()
 
+    # --- SEED DATA WITH ID CHECKS ---
+    admin_id = "u-admin-1"
     admin_email = "admin@footpulse.app"
-    admin = db.query(User).filter(User.email == admin_email).first()
+    admin = db.query(User).filter(User.id == admin_id).first()
     if not admin:
-        admin = User(
-            id="u-admin-1", 
-            name="Academy Director", 
-            email=admin_email, 
-            password_hash=get_password_hash("password123"), 
-            mobile="+44 7700 900000", 
-            role=UserRole.ADMIN, 
-            avatar="https://picsum.photos/200/200?random=1",
-            is_active=True
-        )
-        db.add(admin)
+        # Check if email exists for another ID (to prevent UNIQUE violation)
+        existing_email_user = db.query(User).filter(User.email == admin_email).first()
+        if not existing_email_user:
+            admin = User(
+                id=admin_id, 
+                name="Academy Director", 
+                email=admin_email, 
+                password_hash=get_password_hash("password123"), 
+                mobile="+44 7700 900000", 
+                role=UserRole.ADMIN, 
+                avatar="https://picsum.photos/200/200?random=1",
+                is_active=True
+            )
+            db.add(admin)
     else:
         admin.password_hash = get_password_hash("password123")
         admin.is_active = True
     
-    if not db.query(User).filter(User.email == "mike@footpulse.app").first():
-        trainer = User(id="u-trainer-1", name="Coach Mike Johnson", email="mike@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900001", role=UserRole.TRAINER, avatar="https://picsum.photos/200/200?random=2", is_active=True)
-        db.add(trainer)
+    trainer_id = "u-trainer-1"
+    trainer_email = "mike@footpulse.app"
+    trainer = db.query(User).filter(User.id == trainer_id).first()
+    if not trainer:
+        if not db.query(User).filter(User.email == trainer_email).first():
+            trainer = User(
+                id=trainer_id, 
+                name="Coach Mike Johnson", 
+                email=trainer_email, 
+                password_hash=get_password_hash("password123"), 
+                mobile="+44 7700 900001", 
+                role=UserRole.TRAINER, 
+                avatar="https://picsum.photos/200/200?random=2", 
+                is_active=True
+            )
+            db.add(trainer)
     
-    if not db.query(User).filter(User.email == "leo@footpulse.app").first():
-        player = User(id="u-player-1", name="Leo Messi Jr.", email="leo@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900002", role=UserRole.PLAYER, trainer_id="u-trainer-1", position="Forward", avatar="https://picsum.photos/200/200?random=3", is_active=True)
-        db.add(player)
+    player_id = "u-player-1"
+    player_email = "leo@footpulse.app"
+    player = db.query(User).filter(User.id == player_id).first()
+    if not player:
+        if not db.query(User).filter(User.email == player_email).first():
+            player = User(
+                id=player_id, 
+                name="Leo Messi Jr.", 
+                email=player_email, 
+                password_hash=get_password_hash("password123"), 
+                mobile="+44 7700 900002", 
+                role=UserRole.PLAYER, 
+                trainer_id="u-trainer-1", 
+                position="Forward", 
+                avatar="https://picsum.photos/200/200?random=3", 
+                is_active=True
+            )
+            db.add(player)
     
     db.commit()
     db.close()

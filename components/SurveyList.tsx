@@ -117,7 +117,8 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
           if (!template || !target || !respondent) return null;
 
           const isCompleted = assignment.status === 'COMPLETED';
-          const isCurrentMonth = assignment.month === currentMonth;
+          const isFutureMonth = assignment.month > currentMonth;
+          const canStart = !isFutureMonth || isAdmin;
 
           return (
             <div 
@@ -129,7 +130,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                   {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Timer className="w-5 h-5" />}
                 </div>
                 <div className={`flex gap-2 items-center ${isRtl ? 'flex-row-reverse' : ''}`}>
-                  <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${isCurrentMonth ? 'bg-slate-50 text-slate-400' : 'bg-rose-50 text-rose-400'}`}>
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${!isFutureMonth ? 'bg-slate-50 text-slate-400' : 'bg-rose-50 text-rose-400'}`}>
                     {assignment.month}
                   </span>
                   {isCompleted ? (
@@ -183,13 +184,13 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                 ) : (
                   (isAdmin || assignment.respondentId === user.id) && (
                     <button
-                      disabled={!isCurrentMonth && !isAdmin}
+                      disabled={!canStart}
                       onClick={() => onStartSurvey(template, target.id)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${isCurrentMonth || isAdmin ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-300 cursor-not-allowed'} ${isRtl ? 'flex-row-reverse' : ''}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${canStart ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-300 cursor-not-allowed'} ${isRtl ? 'flex-row-reverse' : ''}`}
                     >
-                      {!isCurrentMonth && !isAdmin && <Lock className="w-3 h-3" />}
+                      {!canStart && <Lock className="w-3 h-3" />}
                       {t.begin}
-                      {(isCurrentMonth || isAdmin) && <ArrowRight className={`w-3 h-3 ${isRtl ? 'rotate-180' : ''}`} />}
+                      {canStart && <ArrowRight className={`w-3 h-3 ${isRtl ? 'rotate-180' : ''}`} />}
                     </button>
                   )
                 )}
