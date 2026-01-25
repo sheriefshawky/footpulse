@@ -15,7 +15,8 @@ import {
   Globe,
   Lock,
   User as UserIcon,
-  FileText
+  FileText,
+  PieChart
 } from 'lucide-react';
 import { 
   User, 
@@ -33,6 +34,7 @@ import TemplateManagement from './components/TemplateManagement';
 import SurveyList from './components/SurveyList';
 import SurveyForm from './components/SurveyForm';
 import Analytics from './components/Analytics';
+import SurveyAnalytics from './components/SurveyAnalytics';
 import Login from './components/Login';
 import FootPulseLogo from './components/Logo';
 
@@ -101,6 +103,7 @@ const App: React.FC = () => {
       { id: 'dashboard', label: t.dashboard, icon: <LayoutDashboard className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'surveys', label: t.surveys, icon: <ClipboardList className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'analytics', label: t.analytics, icon: <TrendingUp className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
+      { id: 'survey-analytics', label: t.surveyAnalytics, icon: <PieChart className="w-5 h-5" />, roles: [UserRole.ADMIN] },
       { id: 'users', label: t.users, icon: <Users className="w-5 h-5" />, roles: [UserRole.ADMIN] },
       { id: 'templates', label: t.templates, icon: <FileText className="w-5 h-5" />, roles: [UserRole.ADMIN] },
     ];
@@ -331,6 +334,14 @@ const App: React.FC = () => {
                 <Analytics 
                   user={currentUser} 
                   users={users} 
+                  responses={responses} 
+                  lang={lang}
+                />
+              )}
+              {activeTab === 'survey-analytics' && (
+                <SurveyAnalytics 
+                  users={users} 
+                  templates={templates}
                   responses={responses} 
                   lang={lang}
                 />
