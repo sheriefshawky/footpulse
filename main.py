@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Enum as SQLEnum
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Boolean, Enum as SQLEnum, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
@@ -43,6 +43,7 @@ class User(Base):
     avatar = Column(String, nullable=True)
     trainer_id = Column(String, ForeignKey("users.id"), nullable=True)
     player_id = Column(String, ForeignKey("users.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
 
 class SurveyTemplateModel(Base):
     __tablename__ = "survey_templates"
@@ -118,9 +119,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             raise HTTPException(status_code=401, detail="Invalid credentials")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Selection might fail if column is_active is missing in DB
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    if hasattr(user, 'is_active') and not user.is_active:
+         raise HTTPException(status_code=403, detail="Account is deactivated")
     return user
 
 # --- SCHEMAS ---
@@ -136,6 +141,15 @@ class UserCreate(BaseModel):
     role: UserRole
     trainer_id: Optional[str] = None
     player_id: Optional[str] = None
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    mobile: Optional[str] = None
+    role: Optional[UserRole] = None
+    trainer_id: Optional[str] = None
+    player_id: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class AdminResetPassword(BaseModel):
     new_password: str
@@ -170,7 +184,8 @@ def map_user(u: User):
         "mobile": u.mobile,
         "avatar": u.avatar,
         "trainerId": u.trainer_id,
-        "playerId": u.player_id
+        "playerId": u.player_id,
+        "isActive": getattr(u, 'is_active', True)
     }
 
 def map_template(t: SurveyTemplateModel):
@@ -213,6 +228,9 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
+    if hasattr(user, 'is_active') and not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+
     access_token = create_access_token(data={"sub": user.email})
     return {
         "access_token": access_token, 
@@ -227,19 +245,15 @@ def list_users(current_user: User = Depends(get_current_user), db: Session = Dep
     
     user_ids = {current_user.id}
     
-    # Logic to include relevant users based on role and assignments
     if current_user.role == UserRole.TRAINER:
-        # Include their roster
         roster = db.query(User).filter(User.trainer_id == current_user.id).all()
         for u in roster: user_ids.add(u.id)
-        # Include anyone they are assigned to evaluate
         assignments = db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all()
         for a in assignments:
             if a.target_id: user_ids.add(a.target_id)
             
     elif current_user.role == UserRole.PLAYER:
         if current_user.trainer_id: user_ids.add(current_user.trainer_id)
-        # Include their guardian
         guardians = db.query(User).filter(User.player_id == current_user.id).all()
         for g in guardians: user_ids.add(g.id)
             
@@ -250,14 +264,12 @@ def list_users(current_user: User = Depends(get_current_user), db: Session = Dep
             if child and child.trainer_id:
                 user_ids.add(child.trainer_id)
 
-    # General rule: you can see anyone involved in an assignment with you
-    # (either as a target of yours or a respondent evaluating you)
     for a in db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all():
         if a.target_id: user_ids.add(a.target_id)
     for a in db.query(SurveyAssignment).filter(SurveyAssignment.target_id == current_user.id).all():
         user_ids.add(a.respondent_id)
 
-    users = db.query(User).filter(User.id.in_(list(user_ids))).all()
+    users = db.query(User).filter(User.id.in_(list(user_ids)), User.is_active == True).all()
     return [map_user(u) for u in users]
 
 @app.post("/users")
@@ -273,12 +285,37 @@ def create_user(user_data: UserCreate, current_user: User = Depends(get_current_
         role=user_data.role,
         trainer_id=user_data.trainer_id,
         player_id=user_data.player_id,
-        avatar=f"https://picsum.photos/200/200?random={os.urandom(2).hex()}"
+        avatar=f"https://picsum.photos/200/200?random={os.urandom(2).hex()}",
+        is_active=True
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return map_user(db_user)
+
+@app.patch("/users/{user_id}")
+def update_user(user_id: str, data: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Validation: Do not allow deactivating an Admin
+    if data.is_active is False and user.role == UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail="Cannot deactivate an Admin user")
+
+    if data.name is not None: user.name = data.name
+    if data.email is not None: user.email = data.email
+    if data.mobile is not None: user.mobile = data.mobile
+    if data.role is not None: user.role = data.role
+    if data.trainer_id is not None: user.trainer_id = data.trainer_id
+    if data.player_id is not None: user.player_id = data.player_id
+    if data.is_active is not None: user.is_active = data.is_active
+    
+    db.commit()
+    db.refresh(user)
+    return map_user(user)
 
 @app.patch("/users/{user_id}/reset-password")
 def admin_reset_password(user_id: str, data: AdminResetPassword, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -396,6 +433,11 @@ def get_responses(current_user: User = Depends(get_current_user), db: Session = 
 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Current month check: only admins can submit for past/future months
+    current_month_str = datetime.utcnow().strftime("%Y-%m")
+    if res.month != current_month_str and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail="Surveys can only be submitted for the current month")
+
     db_res = SurveyResponse(
         id=f"sr-{os.urandom(4).hex()}",
         template_id=res.template_id,
@@ -420,9 +462,23 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
     return map_response(db_res)
 
 @app.on_event("startup")
-def seed_data():
+def setup_logic():
     db = SessionLocal()
-    # Force reset admin password for demo purposes to ensure consistency with frontend Login component
+    
+    # --- MIGRATION HACK ---
+    # Attempt to add is_active column if missing
+    try:
+        # Cross-dialect check: PostgreSQL supports ADD COLUMN IF NOT EXISTS, SQLite does not.
+        # So we just try to add it and catch the error if it already exists.
+        db.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE"))
+        db.commit()
+        print("Migration: is_active column added to users table.")
+    except Exception as e:
+        db.rollback()
+        # Column likely already exists or table doesn't exist yet (Base.metadata.create_all handles the latter)
+        pass
+
+    # Force reset admin password for demo purposes
     admin_email = "admin@footpulse.app"
     admin = db.query(User).filter(User.email == admin_email).first()
     if not admin:
@@ -433,20 +489,20 @@ def seed_data():
             password_hash=get_password_hash("password123"), 
             mobile="+44 7700 900000", 
             role=UserRole.ADMIN, 
-            avatar="https://picsum.photos/200/200?random=1"
+            avatar="https://picsum.photos/200/200?random=1",
+            is_active=True
         )
         db.add(admin)
     else:
-        # Update existing admin to ensure password matches 'password123'
         admin.password_hash = get_password_hash("password123")
+        admin.is_active = True
     
-    # Ensure other demo accounts exist
     if not db.query(User).filter(User.email == "mike@footpulse.app").first():
-        trainer = User(id="u-trainer-1", name="Coach Mike Johnson", email="mike@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900001", role=UserRole.TRAINER, avatar="https://picsum.photos/200/200?random=2")
+        trainer = User(id="u-trainer-1", name="Coach Mike Johnson", email="mike@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900001", role=UserRole.TRAINER, avatar="https://picsum.photos/200/200?random=2", is_active=True)
         db.add(trainer)
     
     if not db.query(User).filter(User.email == "leo@footpulse.app").first():
-        player = User(id="u-player-1", name="Leo Messi Jr.", email="leo@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900002", role=UserRole.PLAYER, trainer_id="u-trainer-1", avatar="https://picsum.photos/200/200?random=3")
+        player = User(id="u-player-1", name="Leo Messi Jr.", email="leo@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900002", role=UserRole.PLAYER, trainer_id="u-trainer-1", avatar="https://picsum.photos/200/200?random=3", is_active=True)
         db.add(player)
     
     db.commit()

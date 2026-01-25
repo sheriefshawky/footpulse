@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, Language } from '../types';
-import { UserPlus, Search, Mail, Phone, X, UserCheck, Lock, Edit3, Key } from 'lucide-react';
+import { UserPlus, Search, Mail, Phone, X, UserCheck, Lock, Edit3, Key, ToggleLeft, ToggleRight, ShieldAlert } from 'lucide-react';
 import { translations } from '../translations';
 import { api } from '../api';
 
@@ -29,7 +29,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
     password: '',
     confirmPassword: '',
     trainerId: '',
-    playerId: ''
+    playerId: '',
+    isActive: true
   });
 
   const [resetData, setResetData] = useState({
@@ -56,7 +57,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
       password: '',
       confirmPassword: '',
       trainerId: '',
-      playerId: ''
+      playerId: '',
+      isActive: true
     });
     setShowModal(true);
   };
@@ -72,7 +74,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
       password: '',
       confirmPassword: '',
       trainerId: user.trainerId || '',
-      playerId: user.playerId || ''
+      playerId: user.playerId || '',
+      isActive: user.isActive
     });
     setShowModal(true);
   };
@@ -81,6 +84,17 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
     setSelectedUserForReset(user);
     setResetData({ newPassword: '', confirmPassword: '' });
     setShowResetModal(true);
+  };
+
+  const toggleUserStatus = async (user: User) => {
+    try {
+      await api.patch(`/users/${user.id}`, {
+        is_active: !user.isActive
+      });
+      onRegister();
+    } catch (err: any) {
+      alert(err.message || "Failed to toggle status");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,7 +114,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           mobile: formData.mobile,
           role: formData.role,
           trainer_id: formData.trainerId || null,
-          player_id: formData.playerId || null
+          player_id: formData.playerId || null,
+          is_active: formData.isActive
         });
         alert(t.userUpdated);
       } else {
@@ -178,13 +193,13 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'العضو' : 'Member'}</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'الدور' : 'Role'}</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'الاتصال' : 'Contact'}</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'العلاقات' : 'Relations'}</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'الحالة' : 'Status'}</th>
                 <th className={`px-6 py-4 ${isRtl ? 'text-left' : 'text-right'} text-[10px] font-black text-slate-400 uppercase tracking-widest`}>{isRtl ? 'الإجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredUsers.map(u => (
-                <tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
+                <tr key={u.id} className={`hover:bg-slate-50/50 transition-colors group ${!u.isActive ? 'opacity-60 grayscale' : ''}`}>
                   <td className="px-6 py-4">
                     <div className={`flex items-center gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
                       <img src={u.avatar} className="w-10 h-10 rounded-full border border-slate-200 object-cover" alt="" />
@@ -211,19 +226,15 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    {u.role === UserRole.PLAYER && u.trainerId && (
-                      <div className={`flex items-center gap-1.5 text-[10px] font-bold text-slate-500 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                        <UserCheck className="w-3 h-3" />
-                        {isRtl ? 'المدرب' : 'Coach'}: {users.find(t => t.id === u.trainerId)?.name || 'Unknown'}
-                      </div>
-                    )}
-                    {u.role === UserRole.GUARDIAN && u.playerId && (
-                      <div className={`flex items-center gap-1.5 text-[10px] font-bold text-slate-500 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                        <UserCheck className="w-3 h-3" />
-                        {isRtl ? 'اللاعب' : 'Player'}: {users.find(p => p.id === u.playerId)?.name || 'Unknown'}
-                      </div>
-                    )}
-                    {!u.trainerId && !u.playerId && <span className="text-[10px] text-slate-300 italic font-medium">{isRtl ? 'لا يوجد' : 'None'}</span>}
+                     <button 
+                        onClick={() => toggleUserStatus(u)}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                           u.isActive ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'
+                        } ${isRtl ? 'flex-row-reverse' : ''}`}
+                     >
+                        {u.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                        {u.isActive ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'غير نشط' : 'Inactive')}
+                     </button>
                   </td>
                   <td className={`px-6 py-4 ${isRtl ? 'text-left' : 'text-right'}`}>
                     <div className="flex items-center justify-end gap-3">
@@ -394,6 +405,30 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                   </select>
                 </div>
 
+                {editMode && (
+                   <div className="space-y-1.5">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{isRtl ? 'حالة الحساب' : 'Account Status'}</label>
+                     <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <button 
+                          type="button"
+                          onClick={() => setFormData({...formData, isActive: !formData.isActive})}
+                          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-black uppercase transition-all ${
+                            formData.isActive ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'
+                          }`}
+                        >
+                          {formData.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                          {formData.isActive ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'غير نشط' : 'Inactive')}
+                        </button>
+                        {!formData.isActive && formData.role === UserRole.ADMIN && (
+                           <div className="flex items-center gap-1.5 text-rose-500">
+                              <ShieldAlert className="w-4 h-4" />
+                              <span className="text-[8px] font-black uppercase">{isRtl ? 'لا يمكن إلغاء تنشيط المسؤول' : 'Admins cannot be deactivated'}</span>
+                           </div>
+                        )}
+                     </div>
+                   </div>
+                )}
+
                 {formData.role === UserRole.PLAYER && (
                   <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
                     <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest px-1">{t.assignTrainer}</label>
@@ -439,7 +474,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform active:scale-[0.98] text-sm"
+                  disabled={editMode && !formData.isActive && formData.role === UserRole.ADMIN}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform active:scale-[0.98] text-sm"
                 >
                   {editMode ? t.saveChanges : t.createAccount}
                 </button>

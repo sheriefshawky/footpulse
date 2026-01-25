@@ -27,6 +27,7 @@ export interface User {
   trainerId?: string;
   playerId?: string;
   password?: string;
+  isActive: boolean;
 }
 
 export interface Question {

@@ -118,7 +118,9 @@ export const INITIAL_USERS: User[] = [
     mobile: '+44 7700 900000',
     role: UserRole.ADMIN,
     password: 'password123',
-    avatar: 'https://picsum.photos/200/200?random=1'
+    avatar: 'https://picsum.photos/200/200?random=1',
+    // Fix: Added missing isActive property required by User interface
+    isActive: true
   },
   {
     id: 'u-trainer-1',
@@ -127,7 +129,9 @@ export const INITIAL_USERS: User[] = [
     mobile: '+44 7700 900001',
     role: UserRole.TRAINER,
     password: 'password123',
-    avatar: 'https://picsum.photos/200/200?random=2'
+    avatar: 'https://picsum.photos/200/200?random=2',
+    // Fix: Added missing isActive property required by User interface
+    isActive: true
   },
   {
     id: 'u-player-1',
@@ -137,7 +141,9 @@ export const INITIAL_USERS: User[] = [
     role: UserRole.PLAYER,
     password: 'password123',
     trainerId: 'u-trainer-1',
-    avatar: 'https://picsum.photos/200/200?random=3'
+    avatar: 'https://picsum.photos/200/200?random=3',
+    // Fix: Added missing isActive property required by User interface
+    isActive: true
   },
   {
     id: 'u-guardian-1',
@@ -147,6 +153,8 @@ export const INITIAL_USERS: User[] = [
     role: UserRole.GUARDIAN,
     password: 'password123',
     playerId: 'u-player-1',
-    avatar: 'https://picsum.photos/200/200?random=4'
+    avatar: 'https://picsum.photos/200/200?random=4',
+    // Fix: Added missing isActive property required by User interface
+    isActive: true
   }
 ];

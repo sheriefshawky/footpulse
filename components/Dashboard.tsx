@@ -17,7 +17,7 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { Activity, Users, ClipboardCheck, Calendar, Trophy, CheckCircle2, Circle, User as UserIcon, ArrowRight } from 'lucide-react';
+import { Activity, Users, ClipboardCheck, Calendar, Trophy, CheckCircle2, Circle, User as UserIcon, ArrowRight, Lock } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -138,6 +138,8 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
                pendingAssignments.map(a => {
                   const template = templates.find(t => t.id === a.templateId);
                   const targetUser = users.find(u => u.id === a.targetId);
+                  const isCurrentMonth = a.month === currentMonth;
+                  
                   if (!template) return null;
                   return (
                     <div key={a.id} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-4 hover:border-emerald-200 transition-colors">
@@ -161,18 +163,21 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
                         </div>
                         <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                           <p className="text-[10px] font-medium text-slate-500">
+                           <p className={`text-[10px] font-medium ${isCurrentMonth ? 'text-slate-500' : 'text-rose-500'}`}>
                              {isRtl ? `مستحق لـ: ${a.month}` : `Due for: ${a.month}`}
+                             {!isCurrentMonth && ` (${isRtl ? 'ليس الشهر الحالي' : 'Not current month'})`}
                            </p>
                         </div>
                       </div>
 
                       <button 
+                        disabled={!isCurrentMonth}
                         onClick={() => onStartSurvey(template, a.targetId)}
-                        className={`w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${isRtl ? 'flex-row-reverse' : ''}`}
+                        className={`w-full py-3 ${isCurrentMonth ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg' : 'bg-slate-200 text-slate-400 cursor-not-allowed'} text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${isRtl ? 'flex-row-reverse' : ''}`}
                       >
+                        {!isCurrentMonth && <Lock className="w-3.5 h-3.5" />}
                         {t.startAssessment}
-                        <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                        {isCurrentMonth && <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />}
                       </button>
                     </div>
                   );

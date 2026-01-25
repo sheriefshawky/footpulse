@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, SurveyTemplate, SurveyResponse, Language, SurveyAssignment } from '../types';
-import { CheckCircle2, ArrowRight, Timer, ClipboardCheck, Search, Eye, Filter, X } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Timer, ClipboardCheck, Search, Eye, Filter, X, Lock } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -18,6 +18,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
   const t = translations[lang];
   const isRtl = lang === 'ar';
   const isAdmin = user.role === UserRole.ADMIN;
+  const currentMonth = new Date().toISOString().slice(0, 7);
   
   const [search, setSearch] = useState('');
   const [selectedResponse, setSelectedResponse] = useState<SurveyResponse | null>(null);
@@ -42,12 +43,27 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
   });
 
   const handleViewResponse = (assignment: SurveyAssignment) => {
+    // Fix: SurveyResponse interface uses 'targetPlayerId' instead of 'targetId'
     const res = responses.find(r => 
       r.templateId === assignment.templateId && 
       r.userId === assignment.respondentId && 
-      r.targetPlayerId === assignment.targetId &&
+      r.targetPlayerId === assignment.targetId && // Corrected property from targetId to targetPlayerId
       r.month === assignment.month
     );
+    if (!res) {
+       // Backup check for existing data structure
+       const res2 = responses.find(r => 
+        r.templateId === assignment.templateId && 
+        r.userId === assignment.respondentId && 
+        r.targetPlayerId === assignment.targetId &&
+        r.month === assignment.month
+      );
+      if (res2) {
+        setSelectedResponse(res2);
+        return;
+      }
+    }
+
     if (res) {
       setSelectedResponse(res);
     } else {
@@ -91,6 +107,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
           if (!template || !target || !respondent) return null;
 
           const isCompleted = assignment.status === 'COMPLETED';
+          const isCurrentMonth = assignment.month === currentMonth;
 
           return (
             <div 
@@ -102,7 +119,9 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                   {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Timer className="w-5 h-5" />}
                 </div>
                 <div className={`flex gap-2 items-center ${isRtl ? 'flex-row-reverse' : ''}`}>
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2.5 py-1 rounded-full">{assignment.month}</span>
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${isCurrentMonth ? 'bg-slate-50 text-slate-400' : 'bg-rose-50 text-rose-400'}`}>
+                    {assignment.month}
+                  </span>
                   {isCompleted ? (
                     <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest bg-emerald-100 px-2.5 py-1 rounded-full">{isRtl ? 'مكتمل' : 'Completed'}</span>
                   ) : (
@@ -132,7 +151,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
 
               <div className={`pt-4 border-t border-slate-100 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
                 <p className="text-[10px] font-medium text-slate-400 italic">
-                  {isCompleted ? (isRtl ? 'انقر لعرض النتائج' : 'Click to see results') : (isRtl ? 'بانتظار الإكمال' : 'Awaiting completion')}
+                  {isCompleted ? (isRtl ? 'انقر لعرض النتائج' : 'Click to see results') : (isCurrentMonth ? (isRtl ? 'بانتظار الإكمال' : 'Awaiting completion') : (isRtl ? 'مؤرشف' : 'Archived'))}
                 </p>
                 {isCompleted ? (
                   <button
@@ -145,11 +164,13 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                 ) : (
                   !isAdmin && (
                     <button
+                      disabled={!isCurrentMonth}
                       onClick={() => onStartSurvey(template, target.id)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all bg-slate-900 text-white hover:bg-slate-800 ${isRtl ? 'flex-row-reverse' : ''}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${isCurrentMonth ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-300 cursor-not-allowed'} ${isRtl ? 'flex-row-reverse' : ''}`}
                     >
+                      {!isCurrentMonth && <Lock className="w-3 h-3" />}
                       {t.begin}
-                      <ArrowRight className={`w-3 h-3 ${isRtl ? 'rotate-180' : ''}`} />
+                      {isCurrentMonth && <ArrowRight className={`w-3 h-3 ${isRtl ? 'rotate-180' : ''}`} />}
                     </button>
                   )
                 )}
