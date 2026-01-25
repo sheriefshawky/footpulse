@@ -335,6 +335,7 @@ const App: React.FC = () => {
                   user={currentUser} 
                   users={users} 
                   responses={responses} 
+                  templates={templates}
                   lang={lang}
                 />
               )}
