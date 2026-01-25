@@ -7,6 +7,7 @@ import { translations } from '../translations';
 interface Props {
   template: SurveyTemplate;
   targetId: string;
+  month: string;
   currentUser: User;
   users: User[];
   onSubmit: (response: SurveyResponse) => void;
@@ -14,7 +15,7 @@ interface Props {
   lang: Language;
 }
 
-const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, onSubmit, onCancel, lang }) => {
+const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, users, onSubmit, onCancel, lang }) => {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
 
@@ -38,9 +39,10 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, o
       let categoryRawScore = 0;
       let totalQuestionWeights = 0;
       category.questions.forEach(q => {
-        const score = answers[q.id] || 0; 
-        // Logic updated for 1-5 scale: (score / 5) instead of (score / 10)
-        categoryRawScore += (score / 5) * q.weight;
+        const score = answers[q.id] || 0;
+        // Smart scale detection for accurate weighting:
+        const denominator = score > 5 ? 10 : 5;
+        categoryRawScore += (score / denominator) * q.weight;
         totalQuestionWeights += q.weight;
       });
       totalWeightedScore += (categoryRawScore * category.weight) / 100;
@@ -60,7 +62,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, o
         templateId: template.id,
         userId: currentUser.id,
         targetPlayerId: targetId,
-        month: new Date().toISOString().slice(0, 7),
+        month: month, // Use the month passed from props instead of current date
         date: new Date().toISOString(),
         answers,
         weightedScore: calculateWeightedScore()
@@ -108,6 +110,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, o
             <div className={isRtl ? 'text-left' : 'text-right'}>
               <p className="text-[10px] font-black uppercase text-emerald-500 tracking-widest mb-1">{t.step} {currentCategoryIndex + 1} {t.of} {categories.length}</p>
               <h4 className="text-xs font-bold text-slate-400">{isRtl ? template.arName : template.name}</h4>
+              <p className="text-[10px] font-bold text-slate-500">{isRtl ? 'الشهر:' : 'Month:'} {month}</p>
             </div>
           </div>
 

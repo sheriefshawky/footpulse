@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Boolean, Enum as SQLEnum, text
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Boolean, Enum as SQLEnum, text, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
@@ -346,14 +346,18 @@ def create_template(data: TemplateCreateUpdate, current_user: User = Depends(get
     db_t = SurveyTemplateModel(
         id=new_id,
         name=data.name,
-        ar_name=data.ar_name,
+        ar_name=data.arName,
         description=data.description,
-        ar_description=data.ar_description,
+        ar_description=data.arDescription,
         categories=data.categories
     )
     db.add(db_t)
-    db.commit()
-    db.refresh(db_t)
+    try:
+        db.commit()
+        db.refresh(db_t)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     return map_template(db_t)
 
 @app.put("/templates/{template_id}")
@@ -365,12 +369,16 @@ def update_template(template_id: str, data: TemplateCreateUpdate, current_user: 
         raise HTTPException(status_code=404, detail="Template not found")
     
     db_t.name = data.name
-    db_t.ar_name = data.ar_name
+    db_t.ar_name = data.arName
     db_t.description = data.description
-    db_t.ar_description = data.ar_description
+    db_t.ar_description = data.arDescription
     db_t.categories = data.categories
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     return map_template(db_t)
 
 @app.delete("/templates/{template_id}")
@@ -473,11 +481,19 @@ def get_responses(current_user: User = Depends(get_current_user), db: Session = 
 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Robust assignment matching (handling possible leading/trailing spaces in month or IDs)
+    assignment = db.query(SurveyAssignment).filter(
+        SurveyAssignment.template_id == res.template_id.strip(),
+        SurveyAssignment.respondent_id == current_user.id.strip(),
+        SurveyAssignment.target_id == res.target_player_id.strip(),
+        SurveyAssignment.month == res.month.strip()
+    ).first()
+
     current_month_str = datetime.utcnow().strftime("%Y-%m")
     
-    # Restriction: Non-admins cannot submit surveys for future months
-    if res.month > current_month_str and current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=400, detail="Surveys cannot be submitted for future months")
+    # Only block non-admins from submitting future months if they don't have a specific assignment for it.
+    if res.month > current_month_str and current_user.role != UserRole.ADMIN and not assignment:
+        raise HTTPException(status_code=400, detail="Future month assessments require an assignment.")
 
     db_res = SurveyResponse(
         id=f"sr-{os.urandom(4).hex()}",
@@ -490,16 +506,16 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
         date=datetime.utcnow()
     )
     db.add(db_res)
-    assignment = db.query(SurveyAssignment).filter(
-        SurveyAssignment.template_id == res.template_id,
-        SurveyAssignment.respondent_id == current_user.id,
-        SurveyAssignment.target_id == res.target_player_id,
-        SurveyAssignment.month == res.month
-    ).first()
+    
     if assignment:
         assignment.status = 'COMPLETED'
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error during submission")
+        
     return map_response(db_res)
 
 @app.delete("/responses/{response_id}")
@@ -546,7 +562,6 @@ def setup_logic():
     admin_email = "admin@footpulse.app"
     admin = db.query(User).filter(User.id == admin_id).first()
     if not admin:
-        # Check if email exists for another ID (to prevent UNIQUE violation)
         existing_email_user = db.query(User).filter(User.email == admin_email).first()
         if not existing_email_user:
             admin = User(

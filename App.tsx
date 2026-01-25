@@ -56,7 +56,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [activeSurvey, setActiveSurvey] = useState<{template: SurveyTemplate, targetId: string} | null>(null);
+  const [activeSurvey, setActiveSurvey] = useState<{template: SurveyTemplate, targetId: string, month: string} | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -130,8 +130,8 @@ const App: React.FC = () => {
       await refreshData();
       setActiveSurvey(null);
       setActiveTab('dashboard');
-    } catch (err) {
-      alert("Failed to submit survey");
+    } catch (err: any) {
+      alert(err.message || "Failed to submit survey");
     }
   };
 
@@ -298,6 +298,7 @@ const App: React.FC = () => {
             <SurveyForm 
               template={activeSurvey.template} 
               targetId={activeSurvey.targetId} 
+              month={activeSurvey.month}
               currentUser={currentUser}
               users={users}
               onSubmit={submitSurvey}
@@ -313,7 +314,7 @@ const App: React.FC = () => {
                   users={users} 
                   templates={templates}
                   assignments={assignments}
-                  onStartSurvey={(t, id) => setActiveSurvey({template: t, targetId: id})}
+                  onStartSurvey={(t, id, m) => setActiveSurvey({template: t, targetId: id, month: m})}
                   lang={lang}
                 />
               )}
@@ -326,7 +327,7 @@ const App: React.FC = () => {
                   templates={templates} 
                   responses={responses}
                   assignments={assignments}
-                  onStartSurvey={(t, id) => setActiveSurvey({template: t, targetId: id})}
+                  onStartSurvey={(t, id, m) => setActiveSurvey({template: t, targetId: id, month: m})}
                   lang={lang}
                 />
               )}

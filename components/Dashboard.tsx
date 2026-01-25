@@ -26,7 +26,7 @@ interface Props {
   users: User[];
   templates: SurveyTemplate[];
   assignments: SurveyAssignment[];
-  onStartSurvey: (t: SurveyTemplate, targetId: string) => void;
+  onStartSurvey: (t: SurveyTemplate, targetId: string, month: string) => void;
   lang: Language;
 }
 
@@ -173,7 +173,7 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
 
                       <button 
                         disabled={!canStart}
-                        onClick={() => onStartSurvey(template, a.targetId)}
+                        onClick={() => onStartSurvey(template, a.targetId, a.month)}
                         className={`w-full py-3 ${canStart ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg' : 'bg-slate-200 text-slate-400 cursor-not-allowed'} text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${isRtl ? 'flex-row-reverse' : ''}`}
                       >
                         {!canStart && <Lock className="w-3.5 h-3.5" />}
