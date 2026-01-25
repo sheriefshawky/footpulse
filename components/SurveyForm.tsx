@@ -72,7 +72,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
   };
 
   return (
-    <div className={`max-w-4xl mx-auto py-4 animate-in fade-in zoom-in-95 duration-500 ${isRtl ? 'text-right font-arabic' : ''}`}>
+    <div className={`max-w-4xl mx-auto py-4 animate-in fade-in zoom-in-95 duration-500 pb-24 ${isRtl ? 'text-right font-arabic' : ''}`}>
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
         <div className="relative h-2 bg-slate-100">
           <div 
@@ -121,7 +121,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
             </p>
           </div>
 
-          <div className="space-y-12">
+          <div className="space-y-16">
             {currentCategory.questions.map((q) => (
               <div key={q.id} className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
                 <div className={`flex items-start justify-between gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
@@ -131,27 +131,27 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
                 
                 {q.type === 'RATING' ? (
                   <div className="space-y-4">
-                    <div className={`flex justify-between text-xs font-bold text-slate-400 px-1 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      <span>1: {isRtl ? "مبتدئ" : "AMATEUR"}</span>
-                      <span>5: {isRtl ? "محترف" : "PRO"}</span>
+                    <div className={`flex justify-between text-[10px] font-black text-slate-400 px-1 uppercase tracking-widest ${isRtl ? 'flex-row-reverse' : ''}`}>
+                      <span>1: {isRtl ? "مبتدئ" : "Amateur"}</span>
+                      <span>5: {isRtl ? "محترف" : "Pro"}</span>
                     </div>
-                    <div className={`flex items-center gap-6 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      <input 
-                        type="range" 
-                        min="1" 
-                        max="5" 
-                        step="1"
-                        value={answers[q.id] || 3}
-                        onChange={(e) => handleScoreChange(q.id, parseInt(e.target.value))}
-                        className="flex-1 h-3 bg-slate-100 rounded-full appearance-none cursor-pointer accent-emerald-500"
-                      />
-                      <div className={`w-14 h-14 flex items-center justify-center rounded-2xl text-2xl font-black border-2 transition-all ${
-                        answers[q.id] !== undefined
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-lg shadow-emerald-500/10' 
-                        : 'bg-white border-slate-200 text-slate-300'
-                      }`}>
-                        {answers[q.id] || '?'}
-                      </div>
+                    <div className={`grid grid-cols-5 gap-2 md:gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                      {[1, 2, 3, 4, 5].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => handleScoreChange(q.id, val)}
+                          className={`
+                            h-16 md:h-20 rounded-2xl border-2 flex items-center justify-center text-xl md:text-2xl font-black transition-all transform active:scale-95
+                            ${answers[q.id] === val
+                              ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                              : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200 hover:bg-white'
+                            }
+                          `}
+                        >
+                          {val}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 ) : (
@@ -159,6 +159,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
                     {q.options?.map((opt) => (
                       <button
                         key={opt.id}
+                        type="button"
                         onClick={() => handleScoreChange(q.id, opt.value)}
                         className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between group ${
                           answers[q.id] === opt.value
@@ -193,6 +194,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
              </div>
 
              <button
+               type="button"
                onClick={handleNext}
                disabled={!isCurrentCategoryComplete}
                className={`flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-emerald-500/20 transition-all transform active:scale-95 ${isRtl ? 'flex-row-reverse' : ''}`}
