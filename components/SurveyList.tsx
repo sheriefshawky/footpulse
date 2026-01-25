@@ -255,7 +255,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
               <div>
                 <h3 className="text-xl font-black text-slate-900">{isRtl ? 'تفاصيل الاستجابة' : 'Response Details'}</h3>
                 <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mt-1">
-                  {isRtl ? 'النتيجة الموزونة:' : 'Weighted Score:'} {selectedResponse.weightedScore}%
+                  {isRtl ? 'النتيجة الموزونة الإجمالية:' : 'Total Weighted Score:'} {selectedResponse.weightedScore}%
                 </p>
               </div>
               <button onClick={() => setSelectedResponse(null)} className="p-2 hover:bg-slate-100 rounded-2xl transition-colors">
@@ -263,33 +263,49 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
               </button>
             </header>
             <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 no-scrollbar">
-              {templates.find(t => t.id === selectedResponse.templateId)?.categories.map(cat => (
-                <div key={cat.id} className="space-y-4">
-                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-2">{isRtl ? cat.arName : cat.name}</h4>
-                   <div className="space-y-3">
-                     {cat.questions.map(q => {
-                       const score = selectedResponse.answers[q.id];
-                       const selectedOption = q.options?.find(opt => opt.value === score);
-                       
-                       // Numeric rating display fix:
-                       // Always show the denominator. Heuristically detect scale (X/5 vs X/10).
-                       const denominator = score > 5 ? 10 : 5;
-                       const displayText = selectedOption 
-                          ? (isRtl ? selectedOption.arText : selectedOption.text)
-                          : `${score}/${denominator}`;
+              {templates.find(t => t.id === selectedResponse.templateId)?.categories.map(cat => {
+                // Calculate category-specific performance
+                let catRawScore = 0;
+                let totalQWeights = 0;
+                cat.questions.forEach(q => {
+                  const score = selectedResponse.answers[q.id] || 0;
+                  const denominator = score > 5 ? 10 : 5;
+                  catRawScore += (score / denominator) * q.weight;
+                  totalQWeights += q.weight;
+                });
+                const catScore = Math.round(catRawScore);
 
-                       return (
-                         <div key={q.id} className={`flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-2xl ${isRtl ? 'flex-row-reverse' : ''}`}>
-                           <span className="text-sm font-bold text-slate-700">{isRtl ? q.arText : q.text}</span>
-                           <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-emerald-600 shadow-sm whitespace-nowrap min-w-[70px] text-center">
-                             {displayText}
-                           </span>
-                         </div>
-                       );
-                     })}
-                   </div>
-                </div>
-              ))}
+                return (
+                  <div key={cat.id} className="space-y-4">
+                     <div className={`flex items-center justify-between border-b border-slate-100 pb-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{isRtl ? cat.arName : cat.name}</h4>
+                       <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-full">
+                         {isRtl ? 'النتيجة:' : 'Score:'} {catScore}%
+                       </span>
+                     </div>
+                     <div className="space-y-3">
+                       {cat.questions.map(q => {
+                         const score = selectedResponse.answers[q.id];
+                         const selectedOption = q.options?.find(opt => opt.value === score);
+                         
+                         const denominator = score > 5 ? 10 : 5;
+                         const displayText = selectedOption 
+                            ? (isRtl ? selectedOption.arText : selectedOption.text)
+                            : `${score}/${denominator}`;
+
+                         return (
+                           <div key={q.id} className={`flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-2xl ${isRtl ? 'flex-row-reverse' : ''}`}>
+                             <span className="text-sm font-bold text-slate-700">{isRtl ? q.arText : q.text}</span>
+                             <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-emerald-600 shadow-sm whitespace-nowrap min-w-[70px] text-center">
+                               {displayText}
+                             </span>
+                           </div>
+                         );
+                       })}
+                     </div>
+                  </div>
+                );
+              })}
             </div>
             <footer className="p-6 border-t border-slate-100 bg-slate-50 flex justify-center">
               <button onClick={() => setSelectedResponse(null)} className="px-8 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-100">
