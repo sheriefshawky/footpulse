@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { User, UserRole, SurveyResponse, SurveyTemplate, Language, Category, Question } from '../types';
+import React, { useMemo, useState } from 'react';
+import { User, UserRole, SurveyResponse, SurveyTemplate, Language } from '../types';
 import { 
   BarChart, 
   Bar, 
@@ -8,16 +8,19 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  Legend, 
   ResponsiveContainer,
-  LineChart,
-  Line,
   AreaChart,
   Area,
-  ComposedChart
 } from 'recharts';
-import { Filter, ChevronDown, Check, X, Users, Calendar, ClipboardList, List, HelpCircle, LayoutGrid } from 'lucide-react';
+import { ChevronDown, Check, Users, Calendar, ClipboardList, HelpCircle, LayoutGrid } from 'lucide-react';
 import { translations } from '../translations';
+
+interface SurveyAnalyticsProps {
+  users: User[];
+  templates: SurveyTemplate[];
+  responses: SurveyResponse[];
+  lang: Language;
+}
 
 // Custom Multi-Select Dropdown Component
 const MultiSelect: React.FC<{
@@ -36,6 +39,7 @@ const MultiSelect: React.FC<{
   return (
     <div className="relative group">
       <button 
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between gap-3 px-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-emerald-300 transition-all text-sm font-bold text-slate-700 ${isRtl ? 'flex-row-reverse' : ''}`}
       >
@@ -52,6 +56,7 @@ const MultiSelect: React.FC<{
           <div className={`absolute z-50 mt-2 w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl p-2 animate-in zoom-in-95 duration-200 ${isRtl ? 'right-0' : 'left-0'}`}>
             <div className={`flex items-center justify-between p-2 mb-2 border-b border-slate-50 ${isRtl ? 'flex-row-reverse' : ''}`}>
                <button 
+                 type="button"
                  onClick={isAllSelected ? deselectAll : selectAll}
                  className="text-[10px] font-black text-emerald-600 uppercase hover:underline"
                >
@@ -63,6 +68,7 @@ const MultiSelect: React.FC<{
                {options.map(opt => (
                  <button
                    key={opt.id}
+                   type="button"
                    onClick={() => toggle(opt.id)}
                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all ${selected.has(opt.id) ? 'bg-emerald-50 text-emerald-700' : 'hover:bg-slate-50 text-slate-600'} ${isRtl ? 'flex-row-reverse text-right' : 'text-left'}`}
                  >
@@ -80,12 +86,12 @@ const MultiSelect: React.FC<{
   );
 };
 
-const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang }) => {
+const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, responses, lang }) => {
   const t = translations[lang];
   const isRtl = lang === 'ar';
 
   // Available Filter Options
-  const months = useMemo(() => Array.from(new Set(responses.map(r => r.month))).sort(), [responses]);
+  const months: string[] = useMemo(() => Array.from(new Set(responses.map(r => r.month))).sort(), [responses]);
   
   // Filter States
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
@@ -127,8 +133,8 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
     setter(next);
   };
 
-  const selectAll = (items: {id: string}[], setter: (s: Set<string>) => void) => setter(new Set(items.map(i => i.id)));
-  const deselectAll = (setter: (s: Set<string>) => void) => setter(new Set());
+  const selectAllHelper = (items: {id: string}[], setter: (s: Set<string>) => void) => setter(new Set(items.map(i => i.id)));
+  const deselectAllHelper = (setter: (s: Set<string>) => void) => setter(new Set());
 
   // Filter Data
   const filteredData = useMemo(() => {
@@ -146,7 +152,6 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
     filteredData.forEach(r => {
       if (!data[r.month]) data[r.month] = { month: r.month, sum: 0, count: 0 };
       
-      // Calculate score for selected questions/categories within this response
       let totalValue = 0;
       let qCount = 0;
       
@@ -170,7 +175,6 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
         data[r.month].sum += (totalValue / qCount);
         data[r.month].count += 1;
       } else {
-        // If no specific question filters, use the weighted score
         data[r.month].sum += r.weightedScore;
         data[r.month].count += 1;
       }
@@ -214,18 +218,18 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
           options={users.filter(u => u.role !== UserRole.ADMIN).map(u => ({ id: u.id, name: u.name }))}
           selected={selectedUsers}
           toggle={(id) => toggleItem(selectedUsers, setSelectedUsers, id)}
-          selectAll={() => selectAll(users.filter(u => u.role !== UserRole.ADMIN), setSelectedUsers)}
-          deselectAll={() => deselectAll(setSelectedUsers)}
+          selectAll={() => selectAllHelper(users.filter(u => u.role !== UserRole.ADMIN), setSelectedUsers)}
+          deselectAll={() => deselectAllHelper(setSelectedUsers)}
           isRtl={isRtl}
         />
         <MultiSelect 
           label={isRtl ? 'الأشهر' : 'Months'} 
           icon={<Calendar className="w-4 h-4 text-emerald-500" />}
-          options={months.map(m => ({ id: m, name: m }))}
+          options={months.map((m: string) => ({ id: m, name: m }))}
           selected={selectedMonths}
           toggle={(id) => toggleItem(selectedMonths, setSelectedMonths, id)}
-          selectAll={() => selectAll(months.map(m => ({ id: m })), setSelectedMonths)}
-          deselectAll={() => deselectAll(setSelectedMonths)}
+          selectAll={() => selectAllHelper(months.map((m: string) => ({ id: m })), setSelectedMonths)}
+          deselectAll={() => deselectAllHelper(setSelectedMonths)}
           isRtl={isRtl}
         />
         <MultiSelect 
@@ -234,8 +238,8 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
           options={templates.map(tpl => ({ id: tpl.id, name: isRtl ? tpl.arName : tpl.name }))}
           selected={selectedSurveys}
           toggle={(id) => toggleItem(selectedSurveys, setSelectedSurveys, id)}
-          selectAll={() => selectAll(templates, setSelectedSurveys)}
-          deselectAll={() => deselectAll(setSelectedSurveys)}
+          selectAll={() => selectAllHelper(templates, setSelectedSurveys)}
+          deselectAll={() => deselectAllHelper(setSelectedSurveys)}
           isRtl={isRtl}
         />
         <MultiSelect 
@@ -244,8 +248,8 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
           options={availableCategories}
           selected={selectedCategories}
           toggle={(id) => toggleItem(selectedCategories, setSelectedCategories, id)}
-          selectAll={() => selectAll(availableCategories, setSelectedCategories)}
-          deselectAll={() => deselectAll(setSelectedCategories)}
+          selectAll={() => selectAllHelper(availableCategories, setSelectedCategories)}
+          deselectAll={() => deselectAllHelper(setSelectedCategories)}
           isRtl={isRtl}
         />
         <MultiSelect 
@@ -254,8 +258,8 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
           options={availableQuestions}
           selected={selectedQuestions}
           toggle={(id) => toggleItem(selectedQuestions, setSelectedQuestions, id)}
-          selectAll={() => selectAll(availableQuestions, setSelectedQuestions)}
-          deselectAll={() => deselectAll(setSelectedQuestions)}
+          selectAll={() => selectAllHelper(availableQuestions, setSelectedQuestions)}
+          deselectAll={() => deselectAllHelper(setSelectedQuestions)}
           isRtl={isRtl}
         />
       </div>
@@ -317,7 +321,6 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
                 <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                 <Bar dataKey="score" fill="#3b82f6" radius={[0, 8, 8, 0]} barSize={24}>
                    {comparisonData.map((entry, index) => (
-                     /* Fix: Recharts Cell component must be capitalized and imported */
                      <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#3b82f6'} />
                    ))}
                 </Bar>
@@ -352,7 +355,7 @@ const SurveyAnalytics: React.FC<Props> = ({ users, templates, responses, lang })
                   <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                        <img src={user?.avatar} className="w-8 h-8 rounded-full object-cover" />
+                        <img src={user?.avatar} className="w-8 h-8 rounded-full object-cover" alt="" />
                         <span className="text-xs font-bold text-slate-900">{user?.name}</span>
                       </div>
                     </td>
