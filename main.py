@@ -43,6 +43,7 @@ class User(Base):
     avatar = Column(String, nullable=True)
     trainer_id = Column(String, ForeignKey("users.id"), nullable=True)
     player_id = Column(String, ForeignKey("users.id"), nullable=True)
+    position = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
 
 class SurveyTemplateModel(Base):
@@ -120,7 +121,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Selection might fail if column is_active is missing in DB
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
@@ -141,6 +141,7 @@ class UserCreate(BaseModel):
     role: UserRole
     trainer_id: Optional[str] = None
     player_id: Optional[str] = None
+    position: Optional[str] = None
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -149,6 +150,7 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     trainer_id: Optional[str] = None
     player_id: Optional[str] = None
+    position: Optional[str] = None
     is_active: Optional[bool] = None
 
 class AdminResetPassword(BaseModel):
@@ -185,6 +187,7 @@ def map_user(u: User):
         "avatar": u.avatar,
         "trainerId": u.trainer_id,
         "playerId": u.player_id,
+        "position": u.position,
         "isActive": getattr(u, 'is_active', True)
     }
 
@@ -285,6 +288,7 @@ def create_user(user_data: UserCreate, current_user: User = Depends(get_current_
         role=user_data.role,
         trainer_id=user_data.trainer_id,
         player_id=user_data.player_id,
+        position=user_data.position,
         avatar=f"https://picsum.photos/200/200?random={os.urandom(2).hex()}",
         is_active=True
     )
@@ -301,7 +305,6 @@ def update_user(user_id: str, data: UserUpdate, current_user: User = Depends(get
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Validation: Do not allow deactivating an Admin
     if data.is_active is False and user.role == UserRole.ADMIN:
         raise HTTPException(status_code=400, detail="Cannot deactivate an Admin user")
 
@@ -311,6 +314,7 @@ def update_user(user_id: str, data: UserUpdate, current_user: User = Depends(get
     if data.role is not None: user.role = data.role
     if data.trainer_id is not None: user.trainer_id = data.trainer_id
     if data.player_id is not None: user.player_id = data.player_id
+    if data.position is not None: user.position = data.position
     if data.is_active is not None: user.is_active = data.is_active
     
     db.commit()
@@ -385,7 +389,12 @@ def get_assignments(current_user: User = Depends(get_current_user), db: Session 
     if current_user.role == UserRole.ADMIN:
         assignments = db.query(SurveyAssignment).all()
     else:
-        assignments = db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all()
+        # Show what they need to fill OR what is about them/their child
+        assignments = db.query(SurveyAssignment).filter(
+            (SurveyAssignment.respondent_id == current_user.id) | 
+            (SurveyAssignment.target_id == current_user.id) |
+            (SurveyAssignment.target_id == current_user.player_id)
+        ).all()
     return [map_assignment(a) for a in assignments]
 
 @app.post("/assignments")
@@ -397,7 +406,13 @@ def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_
     targets = data.target_ids if data.target_ids and len(data.target_ids) > 0 else [None]
     
     for r_id in data.respondent_ids:
-        for t_id in targets:
+        # Safety for Guardians: If respondent is guardian, restrict target to their child
+        resp_user = db.query(User).filter(User.id == r_id).first()
+        actual_targets = targets
+        if resp_user and resp_user.role == UserRole.GUARDIAN and resp_user.player_id:
+            actual_targets = [resp_user.player_id]
+
+        for t_id in actual_targets:
             final_target = t_id if t_id else r_id
             existing = db.query(SurveyAssignment).filter(
                 SurveyAssignment.template_id == data.template_id,
@@ -421,19 +436,43 @@ def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_
     db.commit()
     return {"count": len(new_assignments)}
 
+@app.delete("/assignments/{assignment_id}")
+def delete_assignment(assignment_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    db_assign = db.query(SurveyAssignment).filter(SurveyAssignment.id == assignment_id).first()
+    if not db_assign:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    # If the assignment is COMPLETED, we should also delete the response
+    if db_assign.status == 'COMPLETED':
+        db_res = db.query(SurveyResponse).filter(
+            SurveyResponse.template_id == db_assign.template_id,
+            SurveyResponse.user_id == db_assign.respondent_id,
+            SurveyResponse.target_player_id == db_assign.target_id,
+            SurveyResponse.month == db_assign.month
+        ).first()
+        if db_res:
+            db.delete(db_res)
+            
+    db.delete(db_assign)
+    db.commit()
+    return {"detail": "Assignment deleted successfully"}
+
 @app.get("/responses")
 def get_responses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
         responses = db.query(SurveyResponse).all()
     else:
         responses = db.query(SurveyResponse).filter(
-            (SurveyResponse.user_id == current_user.id) | (SurveyResponse.target_player_id == current_user.id)
+            (SurveyResponse.user_id == current_user.id) | 
+            (SurveyResponse.target_player_id == current_user.id) |
+            (SurveyResponse.target_player_id == current_user.player_id)
         ).all()
     return [map_response(r) for r in responses]
 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Current month check: only admins can submit for past/future months
     current_month_str = datetime.utcnow().strftime("%Y-%m")
     if res.month != current_month_str and current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=400, detail="Surveys can only be submitted for the current month")
@@ -461,24 +500,45 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
     db.commit()
     return map_response(db_res)
 
+@app.delete("/responses/{response_id}")
+def delete_response(response_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    db_res = db.query(SurveyResponse).filter(SurveyResponse.id == response_id).first()
+    if not db_res:
+        raise HTTPException(status_code=404, detail="Response not found")
+    
+    # Revert assignment status
+    assignment = db.query(SurveyAssignment).filter(
+        SurveyAssignment.template_id == db_res.template_id,
+        SurveyAssignment.respondent_id == db_res.user_id,
+        SurveyAssignment.target_id == db_res.target_player_id,
+        SurveyAssignment.month == db_res.month
+    ).first()
+    if assignment:
+        assignment.status = 'PENDING'
+    
+    db.delete(db_res)
+    db.commit()
+    return {"detail": "Response deleted and assignment reverted"}
+
 @app.on_event("startup")
 def setup_logic():
     db = SessionLocal()
     
-    # --- MIGRATION HACK ---
-    # Attempt to add is_active column if missing
+    # --- MIGRATIONS ---
     try:
-        # Cross-dialect check: PostgreSQL supports ADD COLUMN IF NOT EXISTS, SQLite does not.
-        # So we just try to add it and catch the error if it already exists.
         db.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE"))
         db.commit()
-        print("Migration: is_active column added to users table.")
-    except Exception as e:
+    except Exception:
         db.rollback()
-        # Column likely already exists or table doesn't exist yet (Base.metadata.create_all handles the latter)
-        pass
 
-    # Force reset admin password for demo purposes
+    try:
+        db.execute(text("ALTER TABLE users ADD COLUMN position VARCHAR"))
+        db.commit()
+    except Exception:
+        db.rollback()
+
     admin_email = "admin@footpulse.app"
     admin = db.query(User).filter(User.email == admin_email).first()
     if not admin:
@@ -502,20 +562,8 @@ def setup_logic():
         db.add(trainer)
     
     if not db.query(User).filter(User.email == "leo@footpulse.app").first():
-        player = User(id="u-player-1", name="Leo Messi Jr.", email="leo@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900002", role=UserRole.PLAYER, trainer_id="u-trainer-1", avatar="https://picsum.photos/200/200?random=3", is_active=True)
+        player = User(id="u-player-1", name="Leo Messi Jr.", email="leo@footpulse.app", password_hash=get_password_hash("password123"), mobile="+44 7700 900002", role=UserRole.PLAYER, trainer_id="u-trainer-1", position="Forward", avatar="https://picsum.photos/200/200?random=3", is_active=True)
         db.add(player)
     
     db.commit()
-
-    if db.query(SurveyTemplateModel).count() == 0:
-        db_t = SurveyTemplateModel(
-            id='t-trainer-eval', name="Trainer's Monthly Player Evaluation", ar_name="تقييم المدرب الشهري للاعب",
-            description="Comprehensive performance review covering technical, physical, and behavioral metrics.", ar_description="مراجعة شاملة للأداء تغطي المقاييس الفنية والبدنية والسلوكية.",
-            categories=[{
-                "id": 'c-tech', "name": 'Technical Proficiency', "arName": 'الكفاءة الفنية', "weight": 100,
-                "questions": [{"id": 'q-tech-1', "text": 'Ball Control & First Touch', "arText": 'التحكم بالكرة واللمسة الأولى', "weight": 100, "type": "RATING"}]
-            }]
-        )
-        db.add(db_t)
-        db.commit()
     db.close()

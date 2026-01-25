@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SurveyTemplate, Category, Question, QuestionOption, QuestionType, Language, User, UserRole } from '../types';
-import { Plus, Edit3, Trash2, X, ChevronDown, ChevronUp, Save, Layout, Send, HelpCircle, Check, Search, Filter } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, ChevronDown, ChevronUp, Save, Layout, Send, HelpCircle, Check, Search, Filter, Users } from 'lucide-react';
 import { translations } from '../translations';
 import { api } from '../api';
 
@@ -52,6 +52,34 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
     setSelectedRespondents(new Set());
     setSelectedTargets(new Set());
     setShowAssignModal(true);
+  };
+
+  const handleAssignToAllGuardians = async () => {
+    if (!assigningTemplate) return;
+    const guardians = users.filter(u => u.role === UserRole.GUARDIAN && u.playerId);
+    if (guardians.length === 0) {
+      alert("No active guardians with linked players found.");
+      return;
+    }
+
+    if (confirm(`Assign this survey to all ${guardians.length} guardians for their respective children for ${assignMonth}?`)) {
+      try {
+        // We iterate and create assignments for each guardian specifically for their child
+        for (const g of guardians) {
+          await api.post('/assignments', {
+            template_id: assigningTemplate.id,
+            respondent_ids: [g.id],
+            target_ids: [g.playerId],
+            month: assignMonth
+          });
+        }
+        alert('Bulk assignment for guardians completed!');
+        setShowAssignModal(false);
+        onUpdate();
+      } catch (err) {
+        alert('Failed during bulk assignment');
+      }
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -156,7 +184,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
               const options = q.options || [];
               return {
                 ...q,
-                options: [...options, { id: `opt-${Date.now()}`, text: '', arText: '', value: 5 }]
+                options: [...options, { id: `opt-${Date.now()}`, text: '', arText: '', value: 3 }] // Default to mid-range
               };
             }
             return q;
@@ -239,8 +267,8 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
       alert('Surveys assigned successfully!');
       setShowAssignModal(false);
       onUpdate();
-    } catch (err) {
-      alert('Failed to assign surveys');
+    } catch (err: any) {
+      alert(err.message || 'Failed to assign surveys');
     }
   };
 
@@ -251,6 +279,14 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
   });
 
   const filteredTargets = users.filter(u => {
+    // If only one respondent is selected and they are a guardian, only show their child
+    if (selectedRespondents.size === 1) {
+      const respId = Array.from(selectedRespondents)[0];
+      const resp = users.find(user => user.id === respId);
+      if (resp?.role === UserRole.GUARDIAN && resp.playerId) {
+        return u.id === resp.playerId;
+      }
+    }
     return u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.role.toLowerCase().includes(userSearch.toLowerCase());
   });
 
@@ -430,6 +466,24 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                       </div>
                    </div>
                 </section>
+                
+                {roleFilter === UserRole.GUARDIAN && (
+                  <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                     <div className="flex items-center gap-3">
+                        <Users className="w-6 h-6 text-emerald-600" />
+                        <div>
+                           <h4 className="text-sm font-black text-emerald-800 uppercase tracking-widest">{t.assignAllGuardians}</h4>
+                           <p className="text-xs font-medium text-emerald-600">Quickly create assignments for all guardians to evaluate their specific children.</p>
+                        </div>
+                     </div>
+                     <button 
+                        onClick={handleAssignToAllGuardians}
+                        className="px-6 py-2 bg-emerald-600 text-white text-xs font-black rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-500/20 transition-all"
+                     >
+                        {t.assignAllGuardians}
+                     </button>
+                  </div>
+                )}
              </div>
 
              <footer className="p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -651,7 +705,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                                                     <div className="relative">
                                                        <input 
                                                           type="number" 
-                                                          min="1" max="10"
+                                                          min="1" max="5"
                                                           value={opt.value} 
                                                           onChange={(e) => updateOption(cat.id, q.id, opt.id, { value: Number(e.target.value) })}
                                                           placeholder={t.scoreValue}

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, Language } from '../types';
-import { UserPlus, Search, Mail, Phone, X, UserCheck, Lock, Edit3, Key, ToggleLeft, ToggleRight, ShieldAlert } from 'lucide-react';
+import { UserPlus, Search, Mail, Phone, X, UserCheck, Lock, Edit3, Key, ToggleLeft, ToggleRight, ShieldAlert, MapPin } from 'lucide-react';
 import { translations } from '../translations';
 import { api } from '../api';
 
@@ -30,6 +30,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
     confirmPassword: '',
     trainerId: '',
     playerId: '',
+    position: '',
     isActive: true
   });
 
@@ -58,6 +59,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
       confirmPassword: '',
       trainerId: '',
       playerId: '',
+      position: '',
       isActive: true
     });
     setShowModal(true);
@@ -75,6 +77,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
       confirmPassword: '',
       trainerId: user.trainerId || '',
       playerId: user.playerId || '',
+      position: user.position || '',
       isActive: user.isActive
     });
     setShowModal(true);
@@ -115,6 +118,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           role: formData.role,
           trainer_id: formData.trainerId || null,
           player_id: formData.playerId || null,
+          position: formData.position || null,
           is_active: formData.isActive
         });
         alert(t.userUpdated);
@@ -126,7 +130,8 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           role: formData.role,
           password: formData.password,
           trainer_id: formData.trainerId || null,
-          player_id: formData.playerId || null
+          player_id: formData.playerId || null,
+          position: formData.position || null
         });
         alert("Member registered successfully");
       }
@@ -205,7 +210,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                       <img src={u.avatar} className="w-10 h-10 rounded-full border border-slate-200 object-cover" alt="" />
                       <div>
                         <p className="text-sm font-bold text-slate-900">{u.name}</p>
-                        <p className="text-[10px] text-slate-500 font-medium">ID: {u.id.split('-')[1]}</p>
+                        <p className="text-[10px] text-slate-500 font-medium">ID: {u.id.split('-')[1]} {u.position && `| ${u.position}`}</p>
                       </div>
                     </div>
                   </td>
@@ -430,6 +435,20 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                 )}
 
                 {formData.role === UserRole.PLAYER && (
+                  <>
+                  <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                    <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest px-1">{t.position}</label>
+                    <div className="relative">
+                      <MapPin className={`absolute ${isRtl ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
+                      <input 
+                        type="text" 
+                        value={formData.position}
+                        onChange={(e) => setFormData({...formData, position: e.target.value})}
+                        placeholder="e.g. Center Midfielder"
+                        className={`w-full ${isRtl ? 'pr-10' : 'pl-10'} px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-bold`}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
                     <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest px-1">{t.assignTrainer}</label>
                     <select 
@@ -444,6 +463,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                       ))}
                     </select>
                   </div>
+                  </>
                 )}
 
                 {formData.role === UserRole.GUARDIAN && (

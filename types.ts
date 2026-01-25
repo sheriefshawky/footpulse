@@ -14,7 +14,7 @@ export interface QuestionOption {
   id: string;
   text: string;
   arText: string;
-  value: number; // The score value (e.g. 1-10) associated with this choice
+  value: number; 
 }
 
 export interface User {
@@ -26,6 +26,7 @@ export interface User {
   avatar?: string;
   trainerId?: string;
   playerId?: string;
+  position?: string;
   password?: string;
   isActive: boolean;
 }

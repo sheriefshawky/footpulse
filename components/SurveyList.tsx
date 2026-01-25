@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, SurveyTemplate, SurveyResponse, Language, SurveyAssignment } from '../types';
-import { CheckCircle2, ArrowRight, Timer, ClipboardCheck, Search, Eye, Filter, X, Lock } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Timer, ClipboardCheck, Search, Eye, Filter, X, Lock, Trash2, Edit3 } from 'lucide-react';
 import { translations } from '../translations';
+import { api } from '../api';
 
 interface Props {
   user: User;
@@ -23,10 +24,20 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
   const [search, setSearch] = useState('');
   const [selectedResponse, setSelectedResponse] = useState<SurveyResponse | null>(null);
 
-  // Filter logic
   const filteredAssignments = assignments.filter(a => {
-    // Basic permissions: Admin sees all, Others see only what they respond to
-    if (!isAdmin && a.respondentId !== user.id) return false;
+    // Visibility rules:
+    // 1. Admin sees everything.
+    // 2. Respondent sees what they filled.
+    // 3. Target player sees their own reports.
+    // 4. Guardians see reports where the target is their child.
+    
+    if (isAdmin) return true;
+    
+    const isRespondent = a.respondentId === user.id;
+    const isTarget = a.targetId === user.id;
+    const isChildTarget = user.role === UserRole.GUARDIAN && a.targetId === user.playerId;
+
+    if (!isRespondent && !isTarget && !isChildTarget) return false;
     
     const respondent = users.find(u => u.id === a.respondentId);
     const target = users.find(u => u.id === a.targetId);
@@ -42,28 +53,28 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
     return matchesSearch;
   });
 
+  const handleDeleteAssignment = async (assignment: SurveyAssignment) => {
+    const confirmMsg = assignment.status === 'COMPLETED' 
+      ? (isRtl ? "هل أنت متأكد من حذف هذا الاستبيان؟ سيتم حذف الإجابات أيضاً." : "Are you sure you want to delete this assessment? The response data will also be deleted.")
+      : (isRtl ? "هل أنت متأكد من حذف هذا التقييم المعلق؟" : "Are you sure you want to delete this pending assessment?");
+    
+    if (confirm(confirmMsg)) {
+      try {
+        await api.delete(`/assignments/${assignment.id}`);
+        window.location.reload(); // Refresh to update state
+      } catch (err: any) {
+        alert(err.message || "Failed to delete assessment");
+      }
+    }
+  };
+
   const handleViewResponse = (assignment: SurveyAssignment) => {
-    // Fix: SurveyResponse interface uses 'targetPlayerId' instead of 'targetId'
     const res = responses.find(r => 
       r.templateId === assignment.templateId && 
       r.userId === assignment.respondentId && 
-      r.targetPlayerId === assignment.targetId && // Corrected property from targetId to targetPlayerId
+      r.targetPlayerId === assignment.targetId && 
       r.month === assignment.month
     );
-    if (!res) {
-       // Backup check for existing data structure
-       const res2 = responses.find(r => 
-        r.templateId === assignment.templateId && 
-        r.userId === assignment.respondentId && 
-        r.targetPlayerId === assignment.targetId &&
-        r.month === assignment.month
-      );
-      if (res2) {
-        setSelectedResponse(res2);
-        return;
-      }
-    }
-
     if (res) {
       setSelectedResponse(res);
     } else {
@@ -80,8 +91,8 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
           </h2>
           <p className="text-slate-500 font-medium">
             {isAdmin 
-              ? (isRtl ? 'عرض ومراقبة جميع استبيانات الأكاديمية ونتائجها.' : 'View and monitor all academy surveys and their results.')
-              : (isRtl ? "يرجى إكمال التقييمات المعينة لك لهذا الشهر." : "Please complete the assessments assigned to you for this month.")}
+              ? (isRtl ? 'عرض ومراقبة وحذف استبيانات الأكاديمية.' : 'View and monitor academy surveys.')
+              : (isRtl ? "عرض التقييمات المكتملة والمعلقة." : "View completed and pending assessments.")}
           </p>
         </div>
         
@@ -103,7 +114,6 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
           const respondent = users.find(u => u.id === assignment.respondentId);
           const target = users.find(u => u.id === assignment.targetId);
           
-          // If data is still loading or partially missing, skip rendering this card
           if (!template || !target || !respondent) return null;
 
           const isCompleted = assignment.status === 'COMPLETED';
@@ -150,9 +160,18 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
               </div>
 
               <div className={`pt-4 border-t border-slate-100 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
-                <p className="text-[10px] font-medium text-slate-400 italic">
-                  {isCompleted ? (isRtl ? 'انقر لعرض النتائج' : 'Click to see results') : (isCurrentMonth ? (isRtl ? 'بانتظار الإكمال' : 'Awaiting completion') : (isRtl ? 'مؤرشف' : 'Archived'))}
-                </p>
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <button 
+                      onClick={() => handleDeleteAssignment(assignment)}
+                      className="p-2 hover:bg-rose-50 rounded-lg text-rose-500 transition-colors"
+                      title={t.deleteSurvey}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                
                 {isCompleted ? (
                   <button
                     onClick={() => handleViewResponse(assignment)}
@@ -162,15 +181,15 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                     {isRtl ? 'عرض' : 'View'}
                   </button>
                 ) : (
-                  !isAdmin && (
+                  (isAdmin || assignment.respondentId === user.id) && (
                     <button
-                      disabled={!isCurrentMonth}
+                      disabled={!isCurrentMonth && !isAdmin}
                       onClick={() => onStartSurvey(template, target.id)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${isCurrentMonth ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-300 cursor-not-allowed'} ${isRtl ? 'flex-row-reverse' : ''}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${isCurrentMonth || isAdmin ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-300 cursor-not-allowed'} ${isRtl ? 'flex-row-reverse' : ''}`}
                     >
-                      {!isCurrentMonth && <Lock className="w-3 h-3" />}
+                      {!isCurrentMonth && !isAdmin && <Lock className="w-3 h-3" />}
                       {t.begin}
-                      {isCurrentMonth && <ArrowRight className={`w-3 h-3 ${isRtl ? 'rotate-180' : ''}`} />}
+                      {(isCurrentMonth || isAdmin) && <ArrowRight className={`w-3 h-3 ${isRtl ? 'rotate-180' : ''}`} />}
                     </button>
                   )
                 )}
@@ -178,15 +197,8 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
             </div>
           );
         })}
-        {filteredAssignments.length === 0 && (
-          <div className="col-span-full py-20 text-center">
-            <ClipboardCheck className="w-16 h-16 text-slate-100 mx-auto mb-4" />
-            <p className="text-slate-400 font-medium italic">{isRtl ? "لم يتم العثور على أي استبيانات مطابقة." : "No matching surveys found."}</p>
-          </div>
-        )}
       </div>
 
-      {/* Response Detail Modal */}
       {selectedResponse && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-3xl max-h-[90vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -208,11 +220,10 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                    <div className="space-y-3">
                      {cat.questions.map(q => {
                        const score = selectedResponse.answers[q.id];
-                       // Try to find the matching choice text if it's a multiple choice question
                        const selectedOption = q.options?.find(opt => opt.value === score);
                        const displayText = selectedOption 
                           ? (isRtl ? selectedOption.arText : selectedOption.text)
-                          : `${score}/10`;
+                          : `${score}/5`; // Scale updated to 5
 
                        return (
                          <div key={q.id} className={`flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-2xl ${isRtl ? 'flex-row-reverse' : ''}`}>

@@ -84,14 +84,18 @@ export const translations = {
     weightWarning: "Total weight should equal 100%",
     delete: "Delete",
     questionType: "Question Type",
-    ratingType: "Rating (1-10)",
+    ratingType: "Rating (1-5)",
     choiceType: "Multiple Choice",
     addOption: "Add Option",
     optionLabel: "Choice Label",
     optionLabelAr: "Choice (Arabic)",
     scoreValue: "Score Value",
     selectOption: "Select an option",
-    assessmentAbout: "Assessment About"
+    assessmentAbout: "Assessment About",
+    position: "Position",
+    assignAllGuardians: "Assign to All Guardians",
+    editSurvey: "Edit Survey",
+    deleteSurvey: "Delete Survey"
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -177,13 +181,17 @@ export const translations = {
     weightWarning: "يجب أن يكون إجمالي الوزن 100%",
     delete: "حذف",
     questionType: "نوع السؤال",
-    ratingType: "تقييم (1-10)",
+    ratingType: "تقييم (1-5)",
     choiceType: "خيارات متعددة",
     addOption: "إضافة خيار",
     optionLabel: "نص الخيار",
     optionLabelAr: "الخيار (بالعربي)",
     scoreValue: "قيمة الدرجة",
     selectOption: "اختر خياراً",
-    assessmentAbout: "تقييم حول"
+    assessmentAbout: "تقييم حول",
+    position: "المركز",
+    assignAllGuardians: "تعيين لجميع أولياء الأمور",
+    editSurvey: "تعديل الاستبيان",
+    deleteSurvey: "حذف الاستبيان"
   }
 };

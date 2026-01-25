@@ -39,7 +39,8 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, o
       let totalQuestionWeights = 0;
       category.questions.forEach(q => {
         const score = answers[q.id] || 0; 
-        categoryRawScore += (score / 10) * q.weight;
+        // Logic updated for 1-5 scale: (score / 5) instead of (score / 10)
+        categoryRawScore += (score / 5) * q.weight;
         totalQuestionWeights += q.weight;
       });
       totalWeightedScore += (categoryRawScore * category.weight) / 100;
@@ -85,7 +86,6 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, o
               {t.exitSurvey}
             </button>
             
-            {/* Target Info Display - More Prominent in Survey Form */}
             {targetUser && (
               <div className={`flex items-center gap-4 bg-slate-900 px-6 py-3 rounded-2xl shadow-xl shadow-slate-950/20 border border-slate-800 transition-all ${isRtl ? 'flex-row-reverse' : ''}`}>
                 <div className="relative">
@@ -130,15 +130,15 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, currentUser, users, o
                   <div className="space-y-4">
                     <div className={`flex justify-between text-xs font-bold text-slate-400 px-1 ${isRtl ? 'flex-row-reverse' : ''}`}>
                       <span>1: {isRtl ? "مبتدئ" : "AMATEUR"}</span>
-                      <span>10: {isRtl ? "محترف" : "PRO"}</span>
+                      <span>5: {isRtl ? "محترف" : "PRO"}</span>
                     </div>
                     <div className={`flex items-center gap-6 ${isRtl ? 'flex-row-reverse' : ''}`}>
                       <input 
                         type="range" 
                         min="1" 
-                        max="10" 
+                        max="5" 
                         step="1"
-                        value={answers[q.id] || 5}
+                        value={answers[q.id] || 3}
                         onChange={(e) => handleScoreChange(q.id, parseInt(e.target.value))}
                         className="flex-1 h-3 bg-slate-100 rounded-full appearance-none cursor-pointer accent-emerald-500"
                       />
