@@ -389,19 +389,55 @@ def get_assignments(current_user: User = Depends(get_current_user), db: Session 
     if current_user.role == UserRole.ADMIN:
         assignments = db.query(SurveyAssignment).all()
     else:
-        # Define persona-specific filters
-        clauses = [SurveyAssignment.respondent_id == current_user.id, SurveyAssignment.target_id == current_user.id]
+        # Base query for normal users
+        query = db.query(SurveyAssignment)
         
-        # Guardian can also see assignments involving their linked player (child)
-        if current_user.role == UserRole.GUARDIAN and current_user.player_id:
-            clauses.append(SurveyAssignment.respondent_id == current_user.player_id)
-            clauses.append(SurveyAssignment.target_id == current_user.player_id)
-            
-        assignments = db.query(SurveyAssignment).filter(or_(*clauses)).all()
-        
-        # Trainer additional restriction: Filter out Player Self-Assessments (where Trainer is neither respondent nor target)
         if current_user.role == UserRole.TRAINER:
-            assignments = [a for a in assignments if a.respondent_id == current_user.id or a.target_id == current_user.id]
+            # Rule: Trainer sees evaluations they made OR guardian evaluations for their players
+            # Join with User to check target's trainer_id
+            target_alias = db.query(User).subquery()
+            resp_alias = db.query(User).subquery()
+            
+            assignments = query.filter(
+                or_(
+                    SurveyAssignment.respondent_id == current_user.id,
+                    and_(
+                        db.query(User).filter(User.id == SurveyAssignment.respondent_id).subquery().c.role == UserRole.GUARDIAN,
+                        db.query(User).filter(User.id == SurveyAssignment.target_id).subquery().c.trainer_id == current_user.id
+                    )
+                )
+            ).all()
+            # Refine with manual filter to ensure no player respondents are leaked
+            final_assignments = []
+            for a in assignments:
+                resp = db.query(User).filter(User.id == a.respondent_id).first()
+                target = db.query(User).filter(User.id == a.target_id).first()
+                if a.respondent_id == current_user.id:
+                    final_assignments.append(a)
+                elif resp and resp.role == UserRole.GUARDIAN and target and target.trainer_id == current_user.id:
+                    final_assignments.append(a)
+            return [map_assignment(a) for a in final_assignments]
+
+        elif current_user.role == UserRole.GUARDIAN:
+            # Rule: Guardian sees self-made OR anything respondent is child OR anything target is child
+            assignments = query.filter(
+                or_(
+                    SurveyAssignment.respondent_id == current_user.id,
+                    SurveyAssignment.respondent_id == current_user.player_id,
+                    SurveyAssignment.target_id == current_user.player_id
+                )
+            ).all()
+
+        elif current_user.role == UserRole.PLAYER:
+            # Rule: Player sees self-made OR surveys targeted at them
+            assignments = query.filter(
+                or_(
+                    SurveyAssignment.respondent_id == current_user.id,
+                    SurveyAssignment.target_id == current_user.id
+                )
+            ).all()
+        else:
+            assignments = []
 
     return [map_assignment(a) for a in assignments]
 
@@ -472,17 +508,45 @@ def get_responses(current_user: User = Depends(get_current_user), db: Session = 
     if current_user.role == UserRole.ADMIN:
         responses = db.query(SurveyResponse).all()
     else:
-        # Similar logic to assignments
-        clauses = [SurveyResponse.user_id == current_user.id, SurveyResponse.target_player_id == current_user.id]
+        # Base query
+        query = db.query(SurveyResponse)
         
-        if current_user.role == UserRole.GUARDIAN and current_user.player_id:
-            clauses.append(SurveyResponse.user_id == current_user.player_id)
-            clauses.append(SurveyResponse.target_player_id == current_user.player_id)
-            
-        responses = db.query(SurveyResponse).filter(or_(*clauses)).all()
-
         if current_user.role == UserRole.TRAINER:
-            responses = [r for r in responses if r.user_id == current_user.id or r.target_player_id == current_user.id]
+            # Rule: Trainer sees responses they made OR guardian responses for their players
+            responses = query.all()
+            final_responses = []
+            for r in responses:
+                resp_user = db.query(User).filter(User.id == r.user_id).first()
+                target_user = db.query(User).filter(User.id == r.target_player_id).first()
+                
+                # Check if trainer is respondent
+                if r.user_id == current_user.id:
+                    final_responses.append(r)
+                # Check if respondent is guardian and target is their player
+                elif resp_user and resp_user.role == UserRole.GUARDIAN and target_user and target_user.trainer_id == current_user.id:
+                    final_responses.append(r)
+            return [map_response(r) for r in final_responses]
+
+        elif current_user.role == UserRole.GUARDIAN:
+            # Rule: Guardian sees self-made OR child respondent OR child target
+            responses = query.filter(
+                or_(
+                    SurveyResponse.user_id == current_user.id,
+                    SurveyResponse.user_id == current_user.player_id,
+                    SurveyResponse.target_player_id == current_user.player_id
+                )
+            ).all()
+
+        elif current_user.role == UserRole.PLAYER:
+            # Rule: Player sees self-made OR Targeted at them
+            responses = query.filter(
+                or_(
+                    SurveyResponse.user_id == current_user.id,
+                    SurveyResponse.target_player_id == current_user.id
+                )
+            ).all()
+        else:
+            responses = []
 
     return [map_response(r) for r in responses]
 

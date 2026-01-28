@@ -28,29 +28,32 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
 
   const filteredAssignments = useMemo(() => {
     return assignments.filter(a => {
-      // 1. Strict Visibility Rules
-      if (!isAdmin) {
-        const isRespondent = a.respondentId === user.id;
-        const isTarget = a.targetId === user.id;
+      // 1. Strict Visibility Rules (Determine if user is allowed to see this at all)
+      let isVisible = isAdmin;
+      
+      const respondent = users.find(u => u.id === a.respondentId);
+      const target = users.find(u => u.id === a.targetId);
+      const isRespondent = a.respondentId === user.id;
+      const isTarget = a.targetId === user.id;
 
-        // Guardian Rules: See self, see child respondent, see child target
-        const isChildRespondent = user.role === UserRole.GUARDIAN && user.playerId && a.respondentId === user.playerId;
-        const isChildTarget = user.role === UserRole.GUARDIAN && user.playerId && a.targetId === user.playerId;
-        
-        // Trainer Restriction: Cannot see player self-assessments (where player is both respondent and target)
-        // Trainer can see: Respondent is self OR Target is self (Coach Eval by player)
+      if (!isAdmin) {
         if (user.role === UserRole.TRAINER) {
-          if (!isRespondent && !isTarget) return false;
+          // Trainer sees: Their own evals OR Guardian evals for their players
+          if (isRespondent) isVisible = true;
+          else if (respondent?.role === UserRole.GUARDIAN && target?.trainerId === user.id) isVisible = true;
+          // Note: Trainer MUST NOT see Player -> Coach or Player -> Self (remains false)
         } 
-        // Guardian can see: Respondent is self OR Child is Respondent OR Child is Target
         else if (user.role === UserRole.GUARDIAN) {
-          if (!isRespondent && !isChildRespondent && !isChildTarget) return false;
+          // Guardian sees: Self, Child as respondent, or Child as target
+          if (isRespondent || a.respondentId === user.playerId || a.targetId === user.playerId) isVisible = true;
         }
-        // Player can see: Respondent is self OR Target is self (Trainer Eval about them)
         else if (user.role === UserRole.PLAYER) {
-          if (!isRespondent && !isTarget) return false;
+          // Player sees: Self as respondent or Self as target
+          if (isRespondent || isTarget) isVisible = true;
         }
       }
+
+      if (!isVisible) return false;
 
       // 2. Status Filter
       if (statusFilter !== 'ALL' && a.status !== statusFilter) return false;
@@ -59,18 +62,21 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
       if (templateFilter !== 'ALL' && a.templateId !== templateFilter) return false;
 
       // 4. Search Filter
-      const respondent = users.find(u => u.id === a.respondentId);
-      const target = users.find(u => u.id === a.targetId);
-      const template = templates.find(temp => temp.id === a.templateId);
-      
-      const matchesSearch = 
-        (respondent?.name || '').toLowerCase().includes(search.toLowerCase()) || 
-        (target?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (template?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (template?.arName || '').toLowerCase().includes(search.toLowerCase()) ||
-        (a.month || '').includes(search);
+      if (search.trim()) {
+        const template = templates.find(temp => temp.id === a.templateId);
+        const searchLower = search.toLowerCase();
         
-      return matchesSearch;
+        const matchesSearch = 
+          (respondent?.name || '').toLowerCase().includes(searchLower) || 
+          (target?.name || '').toLowerCase().includes(searchLower) ||
+          (template?.name || '').toLowerCase().includes(searchLower) ||
+          (template?.arName || '').toLowerCase().includes(searchLower) ||
+          (a.month || '').includes(searchLower);
+          
+        if (!matchesSearch) return false;
+      }
+        
+      return true;
     });
   }, [assignments, search, statusFilter, templateFilter, isAdmin, user, users, templates]);
 
