@@ -33,7 +33,12 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
         const isRespondent = a.respondentId === user.id;
         const isTarget = a.targetId === user.id;
         const isChildTarget = user.role === UserRole.GUARDIAN && a.targetId === user.playerId;
-        if (!isRespondent && !isTarget && !isChildTarget) return false;
+        
+        // Trainer Visibility: Evaluations they made + evaluations about players they coach
+        const targetUser = users.find(u => u.id === a.targetId);
+        const isTrainerOfTarget = user.role === UserRole.TRAINER && targetUser?.trainerId === user.id;
+        
+        if (!isRespondent && !isTarget && !isChildTarget && !isTrainerOfTarget) return false;
       }
 
       // 2. Status Filter

@@ -35,6 +35,7 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
   const isRtl = lang === 'ar';
   const currentMonth = new Date().toISOString().slice(0, 7);
   const isTrainer = user.role === UserRole.TRAINER;
+  
   const targetId = user.role === UserRole.PLAYER ? user.id : (user.role === UserRole.GUARDIAN ? user.playerId : '');
 
   const stats = useMemo(() => {
@@ -47,13 +48,26 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
       ];
     }
     
-    const playerResponses = responses.filter(r => r.targetPlayerId === targetId);
-    const avgScore = playerResponses.length > 0 
-      ? Math.round(playerResponses.reduce((acc, r) => acc + r.weightedScore, 0) / playerResponses.length) 
+    // Non-admin stats
+    // Players and Guardians see stats about the Player
+    // Trainers see aggregate for their roster or specific evaluations
+    const visibleResponses = responses.filter(r => {
+        if (user.role === UserRole.PLAYER || user.role === UserRole.GUARDIAN) {
+            return r.targetPlayerId === targetId;
+        }
+        if (user.role === UserRole.TRAINER) {
+            const target = users.find(u => u.id === r.targetPlayerId);
+            return r.userId === user.id || target?.trainerId === user.id;
+        }
+        return false;
+    });
+
+    const avgScore = visibleResponses.length > 0 
+      ? Math.round(visibleResponses.reduce((acc, r) => acc + r.weightedScore, 0) / visibleResponses.length) 
       : 0;
 
     return [
-      { label: t.completed, value: playerResponses.length, icon: <ClipboardCheck className="w-5 h-5" />, color: 'emerald' },
+      { label: t.completed, value: visibleResponses.length, icon: <ClipboardCheck className="w-5 h-5" />, color: 'emerald' },
       { label: t.avgPerformance, value: `${avgScore}%`, icon: <Trophy className="w-5 h-5" />, color: 'amber' },
       { label: t.teamRank, value: isRtl ? 'الرابع' : '4th', icon: <Activity className="w-5 h-5" />, color: 'blue' },
       { label: t.nextSession, value: isRtl ? 'اليوم' : 'Today', icon: <Calendar className="w-5 h-5" />, color: 'purple' },
@@ -61,7 +75,18 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
   }, [user, users, responses, assignments, targetId, t, lang, isRtl]);
 
   const chartData = useMemo(() => {
-    if (user.role === UserRole.ADMIN || isTrainer || responses.length === 0) {
+    const visibleResponses = responses.filter(r => {
+        if (user.role === UserRole.PLAYER || user.role === UserRole.GUARDIAN) {
+            return r.targetPlayerId === targetId;
+        }
+        if (user.role === UserRole.TRAINER) {
+            const target = users.find(u => u.id === r.targetPlayerId);
+            return r.userId === user.id || target?.trainerId === user.id;
+        }
+        return true;
+    });
+
+    if (visibleResponses.length === 0) {
       return [
         { month: isRtl ? 'يناير' : 'Jan', score: 65 },
         { month: isRtl ? 'فبراير' : 'Feb', score: 72 },
@@ -69,12 +94,20 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
         { month: isRtl ? 'أبريل' : 'Apr', score: 85 },
       ];
     }
-    const playerResponses = responses.filter(r => r.targetPlayerId === targetId).slice(-5);
-    return playerResponses.map(r => ({
-      month: r.month,
-      score: r.weightedScore
-    }));
-  }, [user, responses, targetId, isTrainer, isRtl]);
+
+    // Aggregate by month
+    const monthlyAcc: Record<string, { sum: number, count: number }> = {};
+    visibleResponses.forEach(r => {
+        if (!monthlyAcc[r.month]) monthlyAcc[r.month] = { sum: 0, count: 0 };
+        monthlyAcc[r.month].sum += r.weightedScore;
+        monthlyAcc[r.month].count += 1;
+    });
+
+    return Object.entries(monthlyAcc).map(([month, data]) => ({
+      month,
+      score: Math.round(data.sum / data.count)
+    })).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
+  }, [user, responses, targetId, users, isRtl]);
 
   const pendingAssignments = assignments.filter(a => a.respondentId === user.id && a.status === 'PENDING');
 
@@ -144,7 +177,6 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
                   if (!template) return null;
                   return (
                     <div key={a.id} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-4 hover:border-emerald-200 transition-colors">
-                      {/* Prominent Target Header */}
                       <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
                         <img 
                            src={targetUser?.avatar || `https://ui-avatars.com/api/?name=${targetUser?.name || 'User'}`} 

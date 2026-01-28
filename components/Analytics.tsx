@@ -33,18 +33,33 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(() => {
     if (user.role === UserRole.PLAYER) return user.id;
     if (user.role === UserRole.GUARDIAN) return user.playerId || '';
+    if (user.role === UserRole.TRAINER) {
+        return users.find(u => u.role === UserRole.PLAYER && u.trainerId === user.id)?.id || '';
+    }
     return users.find(u => u.role === UserRole.PLAYER)?.id || '';
   });
 
-  const players = users.filter(u => u.role === UserRole.PLAYER);
+  const availablePlayers = useMemo(() => {
+    if (user.role === UserRole.ADMIN) return users.filter(u => u.role === UserRole.PLAYER);
+    if (user.role === UserRole.TRAINER) return users.filter(u => u.role === UserRole.PLAYER && u.trainerId === user.id);
+    if (user.role === UserRole.GUARDIAN) return users.filter(u => u.id === user.playerId);
+    if (user.role === UserRole.PLAYER) return users.filter(u => u.id === user.id);
+    return [];
+  }, [user, users]);
 
-  // 1. Filtered Data for selected player
+  // Ensure selectedPlayerId is valid for current role
+  const finalSelectedId = useMemo(() => {
+    if (availablePlayers.some(p => p.id === selectedPlayerId)) return selectedPlayerId;
+    return availablePlayers[0]?.id || '';
+  }, [selectedPlayerId, availablePlayers]);
+
+  // Filtered Data for selected player
   const playerResponses = useMemo(() => 
-    responses.filter(r => r.targetPlayerId === selectedPlayerId),
-    [responses, selectedPlayerId]
+    responses.filter(r => r.targetPlayerId === finalSelectedId),
+    [responses, finalSelectedId]
   );
 
-  // 2. Trend Data: Average Weighted Score per Month
+  // Trend Data: Average Weighted Score per Month
   const trendData = useMemo(() => {
     const monthlyData: Record<string, { sum: number, count: number }> = {};
     playerResponses.forEach(r => {
@@ -61,13 +76,11 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [playerResponses]);
 
-  // 3. Radar Data: Competency Profile (Category Averages)
+  // Radar Data: Competency Profile (Category Averages)
   const radarData = useMemo(() => {
-    // We calculate Category averages for the Individual and the Squad
     const individualCategories: Record<string, { sum: number, count: number, arName: string }> = {};
     const squadCategories: Record<string, { sum: number, count: number }> = {};
 
-    // Standardize category names for comparison
     const allUniqueCats = new Set<string>();
 
     responses.forEach(res => {
@@ -79,7 +92,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         allUniqueCats.add(catKey);
 
         // Individual aggregation
-        if (res.targetPlayerId === selectedPlayerId) {
+        if (res.targetPlayerId === finalSelectedId) {
           if (!individualCategories[catKey]) individualCategories[catKey] = { sum: 0, count: 0, arName: cat.arName };
           
           let catSum = 0;
@@ -87,7 +100,8 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
           cat.questions.forEach(q => {
             const answer = res.answers[q.id];
             if (answer !== undefined) {
-              catSum += (answer / 5) * 100; // Normalized to 100%
+              const denominator = answer > 5 ? 10 : 5;
+              catSum += (answer / denominator) * 100;
               qCount++;
             }
           });
@@ -97,20 +111,33 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
           }
         }
 
-        // Squad aggregation
-        if (!squadCategories[catKey]) squadCategories[catKey] = { sum: 0, count: 0 };
-        let squadCatSum = 0;
-        let squadQCount = 0;
-        cat.questions.forEach(q => {
-          const answer = res.answers[q.id];
-          if (answer !== undefined) {
-            squadCatSum += (answer / 5) * 100;
-            squadQCount++;
-          }
-        });
-        if (squadQCount > 0) {
-          squadCategories[catKey].sum += (squadCatSum / squadQCount);
-          squadCategories[catKey].count += 1;
+        // Squad aggregation (relevant context for the user role)
+        let isSquadMember = false;
+        if (user.role === UserRole.ADMIN) isSquadMember = true;
+        else if (user.role === UserRole.TRAINER) {
+            const target = users.find(u => u.id === res.targetPlayerId);
+            isSquadMember = target?.trainerId === user.id;
+        } else {
+            // For Players/Guardians, squad is their academy peers (all players)
+            isSquadMember = true; 
+        }
+
+        if (isSquadMember) {
+            if (!squadCategories[catKey]) squadCategories[catKey] = { sum: 0, count: 0 };
+            let squadCatSum = 0;
+            let squadQCount = 0;
+            cat.questions.forEach(q => {
+              const answer = res.answers[q.id];
+              if (answer !== undefined) {
+                const denominator = answer > 5 ? 10 : 5;
+                squadCatSum += (answer / denominator) * 100;
+                squadQCount++;
+              }
+            });
+            if (squadQCount > 0) {
+              squadCategories[catKey].sum += (squadCatSum / squadQCount);
+              squadCategories[catKey].count += 1;
+            }
         }
       });
     });
@@ -124,10 +151,9 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         B: sqd ? Math.round(sqd.sum / sqd.count) : 0,
         fullMark: 100
       };
-    }).filter(d => d.A > 0 || d.B > 0); // Hide empty categories
-  }, [responses, templates, selectedPlayerId, isRtl]);
+    }).filter(d => d.A > 0 || d.B > 0);
+  }, [responses, templates, finalSelectedId, isRtl, user, users]);
 
-  // 4. Focus Areas: Categories with lowest individual scores
   const focusAreas = useMemo(() => {
     return [...radarData]
       .sort((a, b) => a.A - b.A)
@@ -141,7 +167,6 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       }));
   }, [radarData]);
 
-  // 5. Global Metrics
   const academyAvg = useMemo(() => {
     if (responses.length === 0) return 0;
     return Math.round(responses.reduce((acc, r) => acc + r.weightedScore, 0) / responses.length);
@@ -166,16 +191,15 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
           <p className="text-slate-500 font-medium">{isRtl ? 'تعمق في مقاييس نمو اللاعب وفعالية التدريب بناءً على البيانات الحقيقية.' : 'Deep dive into player growth and training effectiveness metrics based on real data.'}</p>
         </div>
         
-        {(user.role === UserRole.ADMIN || user.role === UserRole.TRAINER) && (
+        {availablePlayers.length > 1 && (
           <div className={`flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm ${isRtl ? 'flex-row-reverse' : ''}`}>
             <Filter className={`w-4 h-4 text-slate-400 ${isRtl ? 'mr-2' : 'ml-2'}`} />
             <select 
-              value={selectedPlayerId}
+              value={finalSelectedId}
               onChange={(e) => setSelectedPlayerId(e.target.value)}
               className={`bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 outline-none ${isRtl ? 'pl-8 pr-2' : 'pr-8 pl-2'}`}
             >
-              <option value="">{isRtl ? 'اختر لاعباً...' : 'Select Player...'}</option>
-              {players.map(p => (
+              {availablePlayers.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
@@ -193,15 +217,14 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          {/* Performance Cards */}
           <div className="xl:col-span-1 space-y-6">
             <div className={`bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between overflow-hidden relative ${isRtl ? 'flex-row-reverse' : ''}`}>
                <div className="absolute right-0 bottom-0 opacity-5 scale-150 rotate-12">
                  <TrendingUp className="w-32 h-32" />
                </div>
                <div className={isRtl ? 'text-right' : ''}>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'متوسط الأكاديمية' : 'Academy Average'}</p>
-                  <h3 className="text-4xl font-black text-slate-900">{academyAvg}%</h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'متوسط الأداء' : 'Average Performance'}</p>
+                  <h3 className="text-4xl font-black text-slate-900">{Math.round(playerResponses.reduce((a,b)=>a+b.weightedScore,0)/playerResponses.length)}%</h3>
                   {trendComparison && (
                     <p className={`text-xs font-bold mt-2 flex items-center gap-1 ${trendComparison.isUp ? 'text-emerald-500' : 'text-rose-500'} ${isRtl ? 'flex-row-reverse' : ''}`}>
                       {trendComparison.isUp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -240,7 +263,6 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
             </div>
           </div>
 
-          {/* Radar Chart */}
           <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col">
              <h3 className="text-lg font-bold text-slate-900 mb-6">{t.competencyProfile}</h3>
              <div className="flex-1 min-h-[300px]">
@@ -262,12 +284,11 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
                 </div>
                 <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
                    <div className="w-3 h-3 rounded bg-slate-300"></div>
-                   <span className="text-[10px] font-black uppercase text-slate-500">{isRtl ? 'متوسط الفريق' : 'Squad Average'}</span>
+                   <span className="text-[10px] font-black uppercase text-slate-500">{isRtl ? 'متوسط الفريق' : 'Average'}</span>
                 </div>
              </div>
           </div>
 
-          {/* Growth Chart */}
           <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
              <h3 className="text-lg font-bold text-slate-900 mb-6">{t.growthPath}</h3>
              <div className="h-[300px]">

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { User, SurveyTemplate, SurveyResponse, Category, Language } from '../types';
-import { CheckCircle, AlertCircle, ArrowLeft, Send, Check, User as UserIcon } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowLeft, Send, Check, User as UserIcon, ChevronLeft } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -40,7 +40,6 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
       let totalQuestionWeights = 0;
       category.questions.forEach(q => {
         const score = answers[q.id] || 0;
-        // Smart scale detection for accurate weighting:
         const denominator = score > 5 ? 10 : 5;
         categoryRawScore += (score / denominator) * q.weight;
         totalQuestionWeights += q.weight;
@@ -62,12 +61,19 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
         templateId: template.id,
         userId: currentUser.id,
         targetPlayerId: targetId,
-        month: month, // Use the month passed from props instead of current date
+        month: month,
         date: new Date().toISOString(),
         answers,
         weightedScore: calculateWeightedScore()
       };
       onSubmit(response);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentCategoryIndex > 0) {
+      setCurrentCategoryIndex(prev => prev - 1);
+      window.scrollTo(0, 0);
     }
   };
 
@@ -126,7 +132,6 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
               <div key={q.id} className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
                 <div className={`flex items-start justify-between gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
                    <h5 className="text-lg font-bold text-slate-800 leading-snug max-w-xl">{isRtl ? q.arText : q.text}</h5>
-                   <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black whitespace-nowrap uppercase tracking-widest">WT: {q.weight}%</span>
                 </div>
                 
                 {q.type === 'RATING' ? (
@@ -193,18 +198,30 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
                </span>
              </div>
 
-             <button
-               type="button"
-               onClick={handleNext}
-               disabled={!isCurrentCategoryComplete}
-               className={`flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-emerald-500/20 transition-all transform active:scale-95 ${isRtl ? 'flex-row-reverse' : ''}`}
-             >
-               {currentCategoryIndex === categories.length - 1 ? (
-                 <>{t.submitAssessment} <Send className="w-4 h-4" /></>
-               ) : (
-                 <>{t.continue} <ArrowLeft className={`w-4 h-4 ${isRtl ? '' : 'rotate-180'}`} /></>
+             <div className="flex gap-3">
+               {currentCategoryIndex > 0 && (
+                 <button
+                   type="button"
+                   onClick={handleBack}
+                   className={`flex items-center gap-3 px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all transform active:scale-95 ${isRtl ? 'flex-row-reverse' : ''}`}
+                 >
+                   <ChevronLeft className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                   {isRtl ? 'السابق' : 'Previous'}
+                 </button>
                )}
-             </button>
+               <button
+                 type="button"
+                 onClick={handleNext}
+                 disabled={!isCurrentCategoryComplete}
+                 className={`flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-xl shadow-emerald-500/20 transition-all transform active:scale-95 ${isRtl ? 'flex-row-reverse' : ''}`}
+               >
+                 {currentCategoryIndex === categories.length - 1 ? (
+                   <>{t.submitAssessment} <Send className="w-4 h-4" /></>
+                 ) : (
+                   <>{t.continue} <ArrowLeft className={`w-4 h-4 ${isRtl ? '' : 'rotate-180'}`} /></>
+                 )}
+               </button>
+             </div>
           </div>
         </div>
       </div>
