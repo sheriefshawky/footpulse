@@ -13,9 +13,12 @@ import {
   PolarRadiusAxis,
   Radar,
   AreaChart,
-  Area
+  Area,
+  LineChart,
+  Line,
+  Legend
 } from 'recharts';
-import { Filter, TrendingUp, Target, Zap, Shield, ChevronUp, ChevronDown, Layout, Users, Check, X } from 'lucide-react';
+import { Filter, TrendingUp, Target, Zap, Shield, ChevronUp, ChevronDown, Layout, Users, Check, X, Calendar, Activity } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -26,16 +29,24 @@ interface Props {
   lang: Language;
 }
 
+// Professional color palette for multiple lines
+const LINE_COLORS = [
+  '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', 
+  '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1',
+  '#a855f7', '#d946ef', '#0ea5e9', '#84cc16', '#f43f5e'
+];
+
 // Reuseable Multi-Select Dropdown for Analytics
-const PlayerMultiSelect: React.FC<{
+const MultiSelect: React.FC<{
   label: string;
-  options: User[];
+  options: { id: string; name: string }[];
   selected: Set<string>;
   toggle: (id: string) => void;
   selectAll: () => void;
   deselectAll: () => void;
+  icon: React.ReactNode;
   isRtl: boolean;
-}> = ({ label, options, selected, toggle, selectAll, deselectAll, isRtl }) => {
+}> = ({ label, options, selected, toggle, selectAll, deselectAll, icon, isRtl }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isAllSelected = options.length > 0 && selected.size === options.length;
 
@@ -46,10 +57,12 @@ const PlayerMultiSelect: React.FC<{
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm text-sm font-bold text-slate-700 hover:border-emerald-300 transition-all ${isRtl ? 'flex-row-reverse' : ''}`}
       >
-        <Users className="w-4 h-4 text-slate-400" />
-        <span className="truncate max-w-[150px]">
-          {selected.size === 0 ? 'No Players' : selected.size === options.length ? 'All Players' : `${selected.size} Players`}
-        </span>
+        <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+           {icon}
+           <span className="truncate max-w-[150px]">
+             {selected.size === 0 ? `No ${label}` : selected.size === options.length ? `All ${label}` : `${selected.size} ${label}`}
+           </span>
+        </div>
         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
@@ -93,6 +106,8 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
   const t = translations[lang];
   const isRtl = lang === 'ar';
   
+  const isAdminOrTrainer = user.role === UserRole.ADMIN || user.role === UserRole.TRAINER;
+
   const availablePlayers = useMemo(() => {
     if (user.role === UserRole.ADMIN) return users.filter(u => u.role === UserRole.PLAYER);
     if (user.role === UserRole.TRAINER) return users.filter(u => u.role === UserRole.PLAYER && u.trainerId === user.id);
@@ -101,10 +116,18 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     return [];
   }, [user, users]);
 
+  const availableMonths = useMemo(() => {
+    const months = Array.from(new Set(responses.map(r => r.month))).sort();
+    return months.map(m => ({ id: m, name: m }));
+  }, [responses]);
+
+  // Filter States
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set(
     availablePlayers.length > 0 ? [availablePlayers[0].id] : []
   ));
-
+  const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set(
+    availableMonths.map(m => m.id)
+  ));
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('ALL');
 
   const togglePlayer = (id: string) => {
@@ -114,13 +137,41 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     setSelectedPlayerIds(next);
   };
 
-  // Filtered Data for selected player(s)
+  const toggleMonth = (id: string) => {
+    const next = new Set(selectedMonths);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedMonths(next);
+  };
+
+  // Filtered Data for charts and stats
   const playerResponses = useMemo(() => 
-    responses.filter(r => selectedPlayerIds.has(r.targetPlayerId)),
-    [responses, selectedPlayerIds]
+    responses.filter(r => 
+      selectedPlayerIds.has(r.targetPlayerId) && 
+      (selectedMonths.size === 0 || selectedMonths.has(r.month))
+    ),
+    [responses, selectedPlayerIds, selectedMonths]
   );
 
-  // Trend Data: Average Weighted Score per Month across ALL selected players
+  // Grouped Comparison Data for the multi-line chart
+  const comparisonOverTimeData = useMemo(() => {
+    const sortedMonths = Array.from(selectedMonths).sort();
+    return sortedMonths.map(m => {
+      const entry: any = { month: m };
+      selectedPlayerIds.forEach(pid => {
+        const player = users.find(u => u.id === pid);
+        if (!player) return;
+        
+        const monthRes = playerResponses.filter(r => r.targetPlayerId === pid && r.month === m);
+        if (monthRes.length > 0) {
+          entry[player.name] = Math.round(monthRes.reduce((a, b) => a + b.weightedScore, 0) / monthRes.length);
+        }
+      });
+      return entry;
+    });
+  }, [playerResponses, selectedPlayerIds, selectedMonths, users]);
+
+  // Trend Data: Average Weighted Score per Month across ALL selected players and selected months
   const trendData = useMemo(() => {
     const monthlyData: Record<string, { sum: number, count: number }> = {};
     playerResponses.forEach(r => {
@@ -144,8 +195,11 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     const allUniqueCats = new Set<string>();
 
     responses.forEach(res => {
-      // If template filter is active, skip responses from other templates
+      // Apply Template Filter
       if (selectedTemplateId !== 'ALL' && res.templateId !== selectedTemplateId) return;
+      
+      // Apply Month Filter
+      if (selectedMonths.size > 0 && !selectedMonths.has(res.month)) return;
 
       const template = templates.find(tpl => tpl.id === res.templateId);
       if (!template) return;
@@ -207,7 +261,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         fullMark: 100
       };
     }).filter(d => d.A > 0 || d.B > 0);
-  }, [responses, templates, selectedPlayerIds, isRtl, user, users, selectedTemplateId]);
+  }, [responses, templates, selectedPlayerIds, selectedMonths, isRtl, user, users, selectedTemplateId]);
 
   const focusAreas = useMemo(() => {
     return [...radarData]
@@ -238,14 +292,15 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       <div className={`flex flex-col md:flex-row md:items-center justify-between gap-6 ${isRtl ? 'md:flex-row-reverse' : ''}`}>
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">{t.dataInsights}</h2>
-          <p className="text-slate-500 font-medium">{isRtl ? 'تحليل الأداء الفردي والجماعي بناءً على القوالب المختارة.' : 'Analyze individual and group performance based on selected templates.'}</p>
+          <p className="text-slate-500 font-medium">{isRtl ? 'تحليل الأداء الفردي والجماعي بناءً على القوالب والشهور المختارة.' : 'Analyze individual and group performance based on selected templates and months.'}</p>
         </div>
         
         <div className={`flex flex-wrap items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
           {availablePlayers.length > 1 && (
-            <PlayerMultiSelect 
+            <MultiSelect 
               label={isRtl ? 'اللاعبين' : 'Players'}
-              options={availablePlayers}
+              icon={<Users className="w-4 h-4 text-slate-400" />}
+              options={availablePlayers.map(p => ({ id: p.id, name: p.name }))}
               selected={selectedPlayerIds}
               toggle={togglePlayer}
               selectAll={() => setSelectedPlayerIds(new Set(availablePlayers.map(p => p.id)))}
@@ -253,6 +308,17 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
               isRtl={isRtl}
             />
           )}
+
+          <MultiSelect 
+            label={isRtl ? 'الشهور' : 'Months'}
+            icon={<Calendar className="w-4 h-4 text-slate-400" />}
+            options={availableMonths}
+            selected={selectedMonths}
+            toggle={toggleMonth}
+            selectAll={() => setSelectedMonths(new Set(availableMonths.map(m => m.id)))}
+            deselectAll={() => setSelectedMonths(new Set())}
+            isRtl={isRtl}
+          />
 
           <div className={`flex items-center gap-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm ${isRtl ? 'flex-row-reverse' : ''}`}>
             <Layout className={`w-4 h-4 text-slate-400 ${isRtl ? 'mr-2' : 'ml-2'}`} />
@@ -276,102 +342,170 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
               <TrendingUp className="w-10 h-10 text-slate-300" />
            </div>
            <h3 className="text-xl font-bold text-slate-900 mb-2">{isRtl ? 'لا توجد بيانات لهذه الاختيارات' : 'No Data for Selection'}</h3>
-           <p className="text-slate-500 max-w-md mx-auto">{isRtl ? 'يرجى تغيير عوامل التصفية أو اختيار لاعبين آخرين.' : 'Try adjusting your filters or selecting different players.'}</p>
+           <p className="text-slate-500 max-w-md mx-auto">{isRtl ? 'يرجى تغيير عوامل التصفية أو اختيار لاعبين/شهور أخرى.' : 'Try adjusting your filters or selecting different players/months.'}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          <div className="xl:col-span-1 space-y-6">
-            <div className={`bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between overflow-hidden relative ${isRtl ? 'flex-row-reverse' : ''}`}>
-               <div className="absolute right-0 bottom-0 opacity-5 scale-150 rotate-12">
-                 <TrendingUp className="w-32 h-32" />
-               </div>
-               <div className={isRtl ? 'text-right' : ''}>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'متوسط أداء المجموعة' : 'Selection Performance'}</p>
-                  <h3 className="text-4xl font-black text-slate-900">{Math.round(playerResponses.reduce((a,b)=>a+b.weightedScore,0)/playerResponses.length)}%</h3>
-                  {trendComparison && (
-                    <p className={`text-xs font-bold mt-2 flex items-center gap-1 ${trendComparison.isUp ? 'text-emerald-500' : 'text-rose-500'} ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      {trendComparison.isUp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      {trendComparison.val}% vs last month
-                    </p>
-                  )}
-               </div>
-               <div className="h-16 w-1 rounded-full bg-emerald-500"></div>
-            </div>
-            
-            <div className={`bg-slate-900 p-8 rounded-[32px] shadow-xl shadow-slate-200 flex flex-col justify-between h-72 text-white overflow-hidden relative ${isRtl ? 'text-right' : ''}`}>
-               <div className="z-10">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">{isRtl ? 'مجالات التركيز للمجموعة' : 'Focus areas (Selection)'}</p>
-                  <div className="space-y-5">
-                    {focusAreas.length > 0 ? focusAreas.map((area, i) => (
-                       <div key={i} className={`flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
-                          <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                            <div className="p-2 bg-slate-800 rounded-lg">
-                               {area.icon}
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div className="xl:col-span-1 space-y-6">
+              <div className={`bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between overflow-hidden relative ${isRtl ? 'flex-row-reverse' : ''}`}>
+                 <div className="absolute right-0 bottom-0 opacity-5 scale-150 rotate-12">
+                   <TrendingUp className="w-32 h-32" />
+                 </div>
+                 <div className={isRtl ? 'text-right' : ''}>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'متوسط أداء المجموعة المختارة' : 'Average Performance (Selection)'}</p>
+                    <h3 className="text-4xl font-black text-slate-900">{Math.round(playerResponses.reduce((a,b)=>a+b.weightedScore,0)/playerResponses.length)}%</h3>
+                    {trendComparison && (
+                      <p className={`text-xs font-bold mt-2 flex items-center gap-1 ${trendComparison.isUp ? 'text-emerald-500' : 'text-rose-500'} ${isRtl ? 'flex-row-reverse' : ''}`}>
+                        {trendComparison.isUp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        {trendComparison.val}% vs last month
+                      </p>
+                    )}
+                 </div>
+                 <div className="h-16 w-1 rounded-full bg-emerald-500"></div>
+              </div>
+              
+              <div className={`bg-slate-900 p-8 rounded-[32px] shadow-xl shadow-slate-200 flex flex-col justify-between h-72 text-white overflow-hidden relative ${isRtl ? 'text-right' : ''}`}>
+                 <div className="z-10">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">{isRtl ? 'مجالات التركيز للفترة المختارة' : 'Focus areas (Selection)'}</p>
+                    <div className="space-y-5">
+                      {focusAreas.length > 0 ? focusAreas.map((area, i) => (
+                         <div key={i} className={`flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
+                            <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                              <div className="p-2 bg-slate-800 rounded-lg">
+                                 {area.icon}
+                              </div>
+                              <span className="text-sm font-bold text-slate-200">{area.label}</span>
                             </div>
-                            <span className="text-sm font-bold text-slate-200">{area.label}</span>
-                          </div>
-                          <div className="flex flex-col items-end">
-                             <span className="text-xs font-black text-slate-400 uppercase">{area.score}%</span>
-                             <div className="w-16 h-1 bg-slate-800 rounded-full mt-1 overflow-hidden">
-                                <div className="h-full bg-emerald-500" style={{ width: `${area.score}%` }}></div>
-                             </div>
-                          </div>
-                       </div>
-                    )) : <p className="text-xs text-slate-500 italic">No category data available</p>}
+                            <div className="flex flex-col items-end">
+                               <span className="text-xs font-black text-slate-400 uppercase">{area.score}%</span>
+                               <div className="w-16 h-1 bg-slate-800 rounded-full mt-1 overflow-hidden">
+                                  <div className="h-full bg-emerald-500" style={{ width: `${area.score}%` }}></div>
+                               </div>
+                            </div>
+                         </div>
+                      )) : <p className="text-xs text-slate-500 italic">No category data available</p>}
+                    </div>
+                 </div>
+                 <div className={`mt-4 pt-4 border-t border-slate-800 text-slate-500 text-[10px] font-black italic ${isRtl ? 'text-right' : ''}`}>
+                   {isRtl ? '*مستمد من أحدث تقييمات الأداء للمجموعة والشهور المختارة' : '*Derived from latest performance assessments of selection'}
+                 </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col">
+               <h3 className="text-lg font-bold text-slate-900 mb-6">{t.competencyProfile}</h3>
+               <div className="flex-1 min-h-[300px]">
+                 <ResponsiveContainer width="100%" height="100%">
+                   <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                     <PolarGrid stroke="#e2e8f0" />
+                     <PolarAngleAxis dataKey="subject" tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} />
+                     <PolarRadiusAxis angle={30} domain={[0, 100]} axisLine={false} tick={false} />
+                     <Radar name={isRtl ? 'المجموعة المختارة' : 'Selection Avg'} dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.6} />
+                     <Radar name={isRtl ? 'متوسط الفريق' : 'Team Avg'} dataKey="B" stroke="#64748b" fill="#94a3b8" fillOpacity={0.1} />
+                     <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                   </RadarChart>
+                 </ResponsiveContainer>
+               </div>
+               <div className={`flex justify-center gap-6 mt-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                  <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                     <div className="w-3 h-3 rounded bg-emerald-500"></div>
+                     <span className="text-[10px] font-black uppercase text-slate-500">{isRtl ? 'المختارة' : 'Selection'}</span>
+                  </div>
+                  <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                     <div className="w-3 h-3 rounded bg-slate-300"></div>
+                     <span className="text-[10px] font-black uppercase text-slate-500">{isRtl ? 'متوسط الفريق' : 'Squad Avg'}</span>
                   </div>
                </div>
-               <div className={`mt-4 pt-4 border-t border-slate-800 text-slate-500 text-[10px] font-black italic ${isRtl ? 'text-right' : ''}`}>
-                 {isRtl ? '*مستمد من أحدث تقييمات الأداء للمجموعة المختارة' : '*Derived from latest performance assessments of selection'}
+            </div>
+
+            <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+               <h3 className="text-lg font-bold text-slate-900 mb-6">{t.growthPath} (Average)</h3>
+               <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                     <AreaChart data={trendData}>
+                        <defs>
+                          <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} dy={10} reversed={isRtl} />
+                        <YAxis orientation={isRtl ? 'right' : 'left'} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} dx={isRtl ? 10 : -10} />
+                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', textAlign: isRtl ? 'right' : 'left' }} />
+                        <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorScore)" dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} />
+                     </AreaChart>
+                  </ResponsiveContainer>
                </div>
             </div>
           </div>
 
-          <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col">
-             <h3 className="text-lg font-bold text-slate-900 mb-6">{t.competencyProfile}</h3>
-             <div className="flex-1 min-h-[300px]">
-               <ResponsiveContainer width="100%" height="100%">
-                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                   <PolarGrid stroke="#e2e8f0" />
-                   <PolarAngleAxis dataKey="subject" tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} />
-                   <PolarRadiusAxis angle={30} domain={[0, 100]} axisLine={false} tick={false} />
-                   <Radar name={isRtl ? 'المجموعة المختارة' : 'Selection Avg'} dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.6} />
-                   <Radar name={isRtl ? 'متوسط الفريق' : 'Team Avg'} dataKey="B" stroke="#64748b" fill="#94a3b8" fillOpacity={0.1} />
-                   <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                 </RadarChart>
-               </ResponsiveContainer>
-             </div>
-             <div className={`flex justify-center gap-6 mt-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                   <div className="w-3 h-3 rounded bg-emerald-500"></div>
-                   <span className="text-[10px] font-black uppercase text-slate-500">{isRtl ? 'المختارة' : 'Selection'}</span>
-                </div>
-                <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                   <div className="w-3 h-3 rounded bg-slate-300"></div>
-                   <span className="text-[10px] font-black uppercase text-slate-500">{isRtl ? 'متوسط الفريق' : 'Squad Avg'}</span>
-                </div>
-             </div>
-          </div>
-
-          <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-             <h3 className="text-lg font-bold text-slate-900 mb-6">{t.growthPath}</h3>
-             <div className="h-[300px]">
+          {/* New Multi-Player Comparison Chart (Admin/Trainer Only) */}
+          {isAdminOrTrainer && selectedPlayerIds.size > 1 && (
+            <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
+              <div className={`flex items-center justify-between mb-8 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                 <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                    <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+                       <Activity className="w-6 h-6" />
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-bold text-slate-900">{isRtl ? 'مقارنة أداء اللاعبين' : 'Player Performance Comparison'}</h3>
+                       <p className="text-xs font-medium text-slate-400">{isRtl ? 'تتبع وتقييم مسارات الأداء الفردية.' : 'Track and compare individual performance trajectories.'}</p>
+                    </div>
+                 </div>
+              </div>
+              
+              <div className="h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
-                   <AreaChart data={trendData}>
-                      <defs>
-                        <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} dy={10} reversed={isRtl} />
-                      <YAxis orientation={isRtl ? 'right' : 'left'} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} dx={isRtl ? 10 : -10} />
-                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', textAlign: isRtl ? 'right' : 'left' }} />
-                      <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorScore)" dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} />
-                   </AreaChart>
+                  <LineChart data={comparisonOverTimeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} 
+                      dy={10} 
+                      reversed={isRtl} 
+                    />
+                    <YAxis 
+                      domain={[0, 100]} 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} 
+                      dx={isRtl ? 10 : -10} 
+                      orientation={isRtl ? 'right' : 'left'}
+                    />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', textAlign: isRtl ? 'right' : 'left' }}
+                    />
+                    <Legend 
+                      verticalAlign="top" 
+                      align={isRtl ? 'right' : 'left'}
+                      iconType="circle"
+                      wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', fontWeight: 'bold' }}
+                    />
+                    {Array.from(selectedPlayerIds).map((pid, idx) => {
+                      const player = users.find(u => u.id === pid);
+                      if (!player) return null;
+                      return (
+                        <Line
+                          key={pid}
+                          type="monotone"
+                          dataKey={player.name}
+                          stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                          strokeWidth={3}
+                          dot={{ r: 4, strokeWidth: 2, fill: LINE_COLORS[idx % LINE_COLORS.length], stroke: '#fff' }}
+                          activeDot={{ r: 6, strokeWidth: 0 }}
+                          animationDuration={1500}
+                        />
+                      );
+                    })}
+                  </LineChart>
                 </ResponsiveContainer>
-             </div>
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
