@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Boolean, Enum as SQLEnum, text, or_
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Boolean, Enum as SQLEnum, text, or_, and_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
@@ -251,9 +251,6 @@ def list_users(current_user: User = Depends(get_current_user), db: Session = Dep
     if current_user.role == UserRole.TRAINER:
         roster = db.query(User).filter(User.trainer_id == current_user.id).all()
         for u in roster: user_ids.add(u.id)
-        assignments = db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all()
-        for a in assignments:
-            if a.target_id: user_ids.add(a.target_id)
             
     elif current_user.role == UserRole.PLAYER:
         if current_user.trainer_id: user_ids.add(current_user.trainer_id)
@@ -266,11 +263,6 @@ def list_users(current_user: User = Depends(get_current_user), db: Session = Dep
             child = db.query(User).filter(User.id == current_user.player_id).first()
             if child and child.trainer_id:
                 user_ids.add(child.trainer_id)
-
-    for a in db.query(SurveyAssignment).filter(SurveyAssignment.respondent_id == current_user.id).all():
-        if a.target_id: user_ids.add(a.target_id)
-    for a in db.query(SurveyAssignment).filter(SurveyAssignment.target_id == current_user.id).all():
-        user_ids.add(a.respondent_id)
 
     users = db.query(User).filter(User.id.in_(list(user_ids)), User.is_active == True).all()
     return [map_user(u) for u in users]
@@ -397,12 +389,20 @@ def get_assignments(current_user: User = Depends(get_current_user), db: Session 
     if current_user.role == UserRole.ADMIN:
         assignments = db.query(SurveyAssignment).all()
     else:
-        # Show what they need to fill OR what is about them/their child
-        assignments = db.query(SurveyAssignment).filter(
-            (SurveyAssignment.respondent_id == current_user.id) | 
-            (SurveyAssignment.target_id == current_user.id) |
-            (SurveyAssignment.target_id == current_user.player_id)
-        ).all()
+        # Define persona-specific filters
+        clauses = [SurveyAssignment.respondent_id == current_user.id, SurveyAssignment.target_id == current_user.id]
+        
+        # Guardian can also see assignments involving their linked player (child)
+        if current_user.role == UserRole.GUARDIAN and current_user.player_id:
+            clauses.append(SurveyAssignment.respondent_id == current_user.player_id)
+            clauses.append(SurveyAssignment.target_id == current_user.player_id)
+            
+        assignments = db.query(SurveyAssignment).filter(or_(*clauses)).all()
+        
+        # Trainer additional restriction: Filter out Player Self-Assessments (where Trainer is neither respondent nor target)
+        if current_user.role == UserRole.TRAINER:
+            assignments = [a for a in assignments if a.respondent_id == current_user.id or a.target_id == current_user.id]
+
     return [map_assignment(a) for a in assignments]
 
 @app.post("/assignments")
@@ -472,16 +472,22 @@ def get_responses(current_user: User = Depends(get_current_user), db: Session = 
     if current_user.role == UserRole.ADMIN:
         responses = db.query(SurveyResponse).all()
     else:
-        responses = db.query(SurveyResponse).filter(
-            (SurveyResponse.user_id == current_user.id) | 
-            (SurveyResponse.target_player_id == current_user.id) |
-            (SurveyResponse.target_player_id == current_user.player_id)
-        ).all()
+        # Similar logic to assignments
+        clauses = [SurveyResponse.user_id == current_user.id, SurveyResponse.target_player_id == current_user.id]
+        
+        if current_user.role == UserRole.GUARDIAN and current_user.player_id:
+            clauses.append(SurveyResponse.user_id == current_user.player_id)
+            clauses.append(SurveyResponse.target_player_id == current_user.player_id)
+            
+        responses = db.query(SurveyResponse).filter(or_(*clauses)).all()
+
+        if current_user.role == UserRole.TRAINER:
+            responses = [r for r in responses if r.user_id == current_user.id or r.target_player_id == current_user.id]
+
     return [map_response(r) for r in responses]
 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Robust assignment matching (handling possible leading/trailing spaces in month or IDs)
     assignment = db.query(SurveyAssignment).filter(
         SurveyAssignment.template_id == res.template_id.strip(),
         SurveyAssignment.respondent_id == current_user.id.strip(),
@@ -491,7 +497,6 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
 
     current_month_str = datetime.utcnow().strftime("%Y-%m")
     
-    # Only block non-admins from submitting future months if they don't have a specific assignment for it.
     if res.month > current_month_str and current_user.role != UserRole.ADMIN and not assignment:
         raise HTTPException(status_code=400, detail="Future month assessments require an assignment.")
 

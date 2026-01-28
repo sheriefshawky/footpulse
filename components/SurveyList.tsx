@@ -28,17 +28,28 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
 
   const filteredAssignments = useMemo(() => {
     return assignments.filter(a => {
-      // 1. Visibility Rules
+      // 1. Strict Visibility Rules
       if (!isAdmin) {
         const isRespondent = a.respondentId === user.id;
         const isTarget = a.targetId === user.id;
-        const isChildTarget = user.role === UserRole.GUARDIAN && a.targetId === user.playerId;
+
+        // Guardian Rules: See self, see child respondent, see child target
+        const isChildRespondent = user.role === UserRole.GUARDIAN && user.playerId && a.respondentId === user.playerId;
+        const isChildTarget = user.role === UserRole.GUARDIAN && user.playerId && a.targetId === user.playerId;
         
-        // Trainer Visibility: Evaluations they made + evaluations about players they coach
-        const targetUser = users.find(u => u.id === a.targetId);
-        const isTrainerOfTarget = user.role === UserRole.TRAINER && targetUser?.trainerId === user.id;
-        
-        if (!isRespondent && !isTarget && !isChildTarget && !isTrainerOfTarget) return false;
+        // Trainer Restriction: Cannot see player self-assessments (where player is both respondent and target)
+        // Trainer can see: Respondent is self OR Target is self (Coach Eval by player)
+        if (user.role === UserRole.TRAINER) {
+          if (!isRespondent && !isTarget) return false;
+        } 
+        // Guardian can see: Respondent is self OR Child is Respondent OR Child is Target
+        else if (user.role === UserRole.GUARDIAN) {
+          if (!isRespondent && !isChildRespondent && !isChildTarget) return false;
+        }
+        // Player can see: Respondent is self OR Target is self (Trainer Eval about them)
+        else if (user.role === UserRole.PLAYER) {
+          if (!isRespondent && !isTarget) return false;
+        }
       }
 
       // 2. Status Filter
