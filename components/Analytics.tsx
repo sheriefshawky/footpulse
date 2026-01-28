@@ -18,7 +18,7 @@ import {
   Line,
   Legend
 } from 'recharts';
-import { Filter, TrendingUp, Target, Zap, Shield, ChevronUp, ChevronDown, Layout, Users, Check, X, Calendar, Activity } from 'lucide-react';
+import { Filter, TrendingUp, Target, Zap, Shield, ChevronUp, ChevronDown, Layout, Users, Check, X, Calendar, Activity, UserCheck } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -59,7 +59,7 @@ const MultiSelect: React.FC<{
       >
         <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
            {icon}
-           <span className="truncate max-w-[150px]">
+           <span className="truncate max-w-[120px]">
              {selected.size === 0 ? `No ${label}` : selected.size === options.length ? `All ${label}` : `${selected.size} ${label}`}
            </span>
         </div>
@@ -106,15 +106,14 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
   const t = translations[lang];
   const isRtl = lang === 'ar';
   
+  const isAdmin = user.role === UserRole.ADMIN;
   const isAdminOrTrainer = user.role === UserRole.ADMIN || user.role === UserRole.TRAINER;
 
-  const availablePlayers = useMemo(() => {
-    if (user.role === UserRole.ADMIN) return users.filter(u => u.role === UserRole.PLAYER);
-    if (user.role === UserRole.TRAINER) return users.filter(u => u.role === UserRole.PLAYER && u.trainerId === user.id);
-    if (user.role === UserRole.GUARDIAN) return users.filter(u => u.id === user.playerId);
-    if (user.role === UserRole.PLAYER) return users.filter(u => u.id === user.id);
-    return [];
-  }, [user, users]);
+  // Filter Options Data
+  const availableTrainers = useMemo(() => 
+    users.filter(u => u.role === UserRole.TRAINER), 
+    [users]
+  );
 
   const availableMonths = useMemo(() => {
     const months = Array.from(new Set(responses.map(r => r.month))).sort();
@@ -122,13 +121,44 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
   }, [responses]);
 
   // Filter States
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set(
-    availablePlayers.length > 0 ? [availablePlayers[0].id] : []
-  ));
+  const [selectedTrainerIds, setSelectedTrainerIds] = useState<Set<string>>(new Set());
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set(
     availableMonths.map(m => m.id)
   ));
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('ALL');
+
+  // Derived available players based on role and Trainer selection
+  const availablePlayers = useMemo(() => {
+    let players = users.filter(u => u.role === UserRole.PLAYER);
+
+    if (user.role === UserRole.ADMIN) {
+      // If trainers are selected, only show players for those trainers
+      if (selectedTrainerIds.size > 0) {
+        players = players.filter(p => p.trainerId && selectedTrainerIds.has(p.trainerId));
+      }
+    } else if (user.role === UserRole.TRAINER) {
+      players = players.filter(p => p.trainerId === user.id);
+    } else if (user.role === UserRole.GUARDIAN) {
+      players = players.filter(p => p.id === user.playerId);
+    } else if (user.role === UserRole.PLAYER) {
+      players = players.filter(p => p.id === user.id);
+    }
+
+    return players;
+  }, [user, users, selectedTrainerIds]);
+
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set(
+    availablePlayers.length > 0 ? [availablePlayers[0].id] : []
+  ));
+
+  const toggleTrainer = (id: string) => {
+    const next = new Set(selectedTrainerIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedTrainerIds(next);
+    // When trainer selection changes, usually we want to reset or update player selection
+    // For now we keep current selection, but it will be filtered in the memo below
+  };
 
   const togglePlayer = (id: string) => {
     const next = new Set(selectedPlayerIds);
@@ -144,13 +174,31 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     setSelectedMonths(next);
   };
 
-  // Filtered Data for charts and stats
+  // Final Filtered Data for charts and stats
   const playerResponses = useMemo(() => 
-    responses.filter(r => 
-      selectedPlayerIds.has(r.targetPlayerId) && 
-      (selectedMonths.size === 0 || selectedMonths.has(r.month))
-    ),
-    [responses, selectedPlayerIds, selectedMonths]
+    responses.filter(r => {
+      const targetPlayer = users.find(u => u.id === r.targetPlayerId);
+      if (!targetPlayer) return false;
+
+      // 1. Trainer Cascading Filter (Admins only)
+      const trainerMatch = selectedTrainerIds.size === 0 || (targetPlayer.trainerId && selectedTrainerIds.has(targetPlayer.trainerId));
+      
+      // 2. Player Filter
+      const playerMatch = selectedPlayerIds.size === 0 || selectedPlayerIds.has(r.targetPlayerId);
+      
+      // 3. Month Filter
+      const monthMatch = selectedMonths.size === 0 || selectedMonths.has(r.month);
+
+      // 4. Role-based visibility check (Ensure they don't see unauthorized data)
+      let roleMatch = false;
+      if (user.role === UserRole.ADMIN) roleMatch = true;
+      else if (user.role === UserRole.TRAINER) roleMatch = targetPlayer.trainerId === user.id;
+      else if (user.role === UserRole.GUARDIAN) roleMatch = targetPlayer.id === user.playerId;
+      else if (user.role === UserRole.PLAYER) roleMatch = targetPlayer.id === user.id;
+
+      return trainerMatch && playerMatch && monthMatch && roleMatch;
+    }),
+    [responses, selectedPlayerIds, selectedMonths, selectedTrainerIds, user, users]
   );
 
   // Grouped Comparison Data for the multi-line chart
@@ -158,20 +206,20 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     const sortedMonths = Array.from(selectedMonths).sort();
     return sortedMonths.map(m => {
       const entry: any = { month: m };
-      selectedPlayerIds.forEach(pid => {
-        const player = users.find(u => u.id === pid);
-        if (!player) return;
+      // Only iterate through players that are currently "available" in the UI
+      availablePlayers.forEach(player => {
+        if (!selectedPlayerIds.has(player.id)) return;
         
-        const monthRes = playerResponses.filter(r => r.targetPlayerId === pid && r.month === m);
+        const monthRes = playerResponses.filter(r => r.targetPlayerId === player.id && r.month === m);
         if (monthRes.length > 0) {
           entry[player.name] = Math.round(monthRes.reduce((a, b) => a + b.weightedScore, 0) / monthRes.length);
         }
       });
       return entry;
     });
-  }, [playerResponses, selectedPlayerIds, selectedMonths, users]);
+  }, [playerResponses, selectedPlayerIds, selectedMonths, availablePlayers]);
 
-  // Trend Data: Average Weighted Score per Month across ALL selected players and selected months
+  // Trend Data: Average Weighted Score per Month
   const trendData = useMemo(() => {
     const monthlyData: Record<string, { sum: number, count: number }> = {};
     playerResponses.forEach(r => {
@@ -188,17 +236,14 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [playerResponses]);
 
-  // Radar Data: Competency Profile (Selection Averages vs Squad Averages)
+  // Radar Data: Competency Profile
   const radarData = useMemo(() => {
     const individualCategories: Record<string, { sum: number, count: number, arName: string }> = {};
     const squadCategories: Record<string, { sum: number, count: number }> = {};
     const allUniqueCats = new Set<string>();
 
     responses.forEach(res => {
-      // Apply Template Filter
       if (selectedTemplateId !== 'ALL' && res.templateId !== selectedTemplateId) return;
-      
-      // Apply Month Filter
       if (selectedMonths.size > 0 && !selectedMonths.has(res.month)) return;
 
       const template = templates.find(tpl => tpl.id === res.templateId);
@@ -208,7 +253,6 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         const catKey = cat.name;
         allUniqueCats.add(catKey);
 
-        // Logic for Category Score Calculation
         let catScoreSum = 0;
         let qAnswerCount = 0;
         cat.questions.forEach(q => {
@@ -223,8 +267,14 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         if (qAnswerCount > 0) {
           const finalScore = (catScoreSum / qAnswerCount);
           
-          // 1. Group/Individual aggregation (The selected filter)
-          if (selectedPlayerIds.has(res.targetPlayerId)) {
+          const targetPlayer = users.find(u => u.id === res.targetPlayerId);
+          if (!targetPlayer) return;
+
+          // Check if this response matches current group selection
+          const matchesTrainer = selectedTrainerIds.size === 0 || (targetPlayer.trainerId && selectedTrainerIds.has(targetPlayer.trainerId));
+          const matchesPlayer = selectedPlayerIds.size === 0 || selectedPlayerIds.has(res.targetPlayerId);
+
+          if (matchesTrainer && matchesPlayer) {
             if (!individualCategories[catKey]) {
               individualCategories[catKey] = { sum: 0, count: 0, arName: cat.arName };
             }
@@ -232,15 +282,11 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
             individualCategories[catKey].count += 1;
           }
 
-          // 2. Squad aggregation (benchmark context)
+          // Squad aggregation (benchmarking context)
           let isSquadMember = false;
           if (user.role === UserRole.ADMIN) isSquadMember = true;
-          else if (user.role === UserRole.TRAINER) {
-              const target = users.find(u => u.id === res.targetPlayerId);
-              isSquadMember = target?.trainerId === user.id;
-          } else {
-              isSquadMember = true; 
-          }
+          else if (user.role === UserRole.TRAINER) isSquadMember = targetPlayer.trainerId === user.id;
+          else isSquadMember = true; 
 
           if (isSquadMember) {
               if (!squadCategories[catKey]) squadCategories[catKey] = { sum: 0, count: 0 };
@@ -261,7 +307,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         fullMark: 100
       };
     }).filter(d => d.A > 0 || d.B > 0);
-  }, [responses, templates, selectedPlayerIds, selectedMonths, isRtl, user, users, selectedTemplateId]);
+  }, [responses, templates, selectedPlayerIds, selectedMonths, selectedTrainerIds, isRtl, user, users, selectedTemplateId]);
 
   const focusAreas = useMemo(() => {
     return [...radarData]
@@ -292,22 +338,34 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       <div className={`flex flex-col md:flex-row md:items-center justify-between gap-6 ${isRtl ? 'md:flex-row-reverse' : ''}`}>
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">{t.dataInsights}</h2>
-          <p className="text-slate-500 font-medium">{isRtl ? 'تحليل الأداء الفردي والجماعي بناءً على القوالب والشهور المختارة.' : 'Analyze individual and group performance based on selected templates and months.'}</p>
+          <p className="text-slate-500 font-medium">{isRtl ? 'تحليل الأداء الفردي والجماعي بناءً على القوالب والشهور والمدربين.' : 'Analyze individual and group performance across templates, months, and coaches.'}</p>
         </div>
         
         <div className={`flex flex-wrap items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
-          {availablePlayers.length > 1 && (
+          {/* Trainer Filter (Admin Only) */}
+          {isAdmin && (
             <MultiSelect 
-              label={isRtl ? 'اللاعبين' : 'Players'}
-              icon={<Users className="w-4 h-4 text-slate-400" />}
-              options={availablePlayers.map(p => ({ id: p.id, name: p.name }))}
-              selected={selectedPlayerIds}
-              toggle={togglePlayer}
-              selectAll={() => setSelectedPlayerIds(new Set(availablePlayers.map(p => p.id)))}
-              deselectAll={() => setSelectedPlayerIds(new Set())}
+              label={isRtl ? 'المدربين' : 'Coaches'}
+              icon={<Activity className="w-4 h-4 text-blue-500" />}
+              options={availableTrainers.map(u => ({ id: u.id, name: u.name }))}
+              selected={selectedTrainerIds}
+              toggle={toggleTrainer}
+              selectAll={() => setSelectedTrainerIds(new Set(availableTrainers.map(u => u.id)))}
+              deselectAll={() => setSelectedTrainerIds(new Set())}
               isRtl={isRtl}
             />
           )}
+
+          <MultiSelect 
+            label={isRtl ? 'اللاعبين' : 'Players'}
+            icon={<Users className="w-4 h-4 text-slate-400" />}
+            options={availablePlayers.map(p => ({ id: p.id, name: p.name }))}
+            selected={selectedPlayerIds}
+            toggle={togglePlayer}
+            selectAll={() => setSelectedPlayerIds(new Set(availablePlayers.map(p => p.id)))}
+            deselectAll={() => setSelectedPlayerIds(new Set())}
+            isRtl={isRtl}
+          />
 
           <MultiSelect 
             label={isRtl ? 'الشهور' : 'Months'}
@@ -342,7 +400,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
               <TrendingUp className="w-10 h-10 text-slate-300" />
            </div>
            <h3 className="text-xl font-bold text-slate-900 mb-2">{isRtl ? 'لا توجد بيانات لهذه الاختيارات' : 'No Data for Selection'}</h3>
-           <p className="text-slate-500 max-w-md mx-auto">{isRtl ? 'يرجى تغيير عوامل التصفية أو اختيار لاعبين/شهور أخرى.' : 'Try adjusting your filters or selecting different players/months.'}</p>
+           <p className="text-slate-500 max-w-md mx-auto">{isRtl ? 'يرجى تغيير عوامل التصفية أو اختيار مدربين/لاعبين/شهور أخرى.' : 'Try adjusting your filters or selecting different coaches/players/months.'}</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -441,17 +499,17 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
             </div>
           </div>
 
-          {/* New Multi-Player Comparison Chart (Admin/Trainer Only) */}
+          {/* Multi-Player Comparison Chart (Admin/Trainer Only) */}
           {isAdminOrTrainer && selectedPlayerIds.size > 1 && (
             <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
               <div className={`flex items-center justify-between mb-8 ${isRtl ? 'flex-row-reverse' : ''}`}>
                  <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
                     <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
-                       <Activity className="w-6 h-6" />
+                       <UserCheck className="w-6 h-6" />
                     </div>
                     <div>
                        <h3 className="text-xl font-bold text-slate-900">{isRtl ? 'مقارنة أداء اللاعبين' : 'Player Performance Comparison'}</h3>
-                       <p className="text-xs font-medium text-slate-400">{isRtl ? 'تتبع وتقييم مسارات الأداء الفردية.' : 'Track and compare individual performance trajectories.'}</p>
+                       <p className="text-xs font-medium text-slate-400">{isRtl ? 'تتبع وتقييم مسارات الأداء الفردية للمجموعة المختارة.' : 'Track and compare individual performance trajectories for the selection.'}</p>
                     </div>
                  </div>
               </div>
