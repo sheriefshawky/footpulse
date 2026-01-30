@@ -14,8 +14,13 @@ from pydantic import BaseModel
 import enum
 
 # --- CONFIGURATION ---
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./footpulse.db")
-SECRET_KEY = "FOOTBALL_DNA_SECRET_KEY_CHANGE_IN_PROD"
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///./footpulse.db"
+
+SECRET_KEY = os.getenv("SECRET_KEY", "FOOTBALL_DNA_SECRET_KEY_CHANGE_IN_PROD")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
@@ -85,7 +90,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password):
+def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def create_access_token(data: dict):
@@ -124,7 +129,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
-    if hasattr(user, 'is_active') and not user.is_active:
+    if not user.is_active:
          raise HTTPException(status_code=403, detail="Account is deactivated")
     return user
 
@@ -153,14 +158,19 @@ class UserUpdate(BaseModel):
     position: Optional[str] = None
     is_active: Optional[bool] = None
 
+class PasswordChange(BaseModel):
+    currentPassword: str
+    newPassword: str
+
 class AdminResetPassword(BaseModel):
     new_password: str
 
 class AssignmentCreate(BaseModel):
     template_id: str
-    respondent_ids: List[str]
-    target_ids: Optional[List[str]] = None
     month: str
+    respondent_ids: Optional[List[str]] = None
+    target_ids: Optional[List[str]] = None
+    bulk_type: Optional[str] = None
 
 class SurveySubmit(BaseModel):
     template_id: str
@@ -188,7 +198,7 @@ def map_user(u: User):
         "trainerId": u.trainer_id,
         "playerId": u.player_id,
         "position": u.position,
-        "isActive": getattr(u, 'is_active', True)
+        "isActive": u.is_active
     }
 
 def map_template(t: SurveyTemplateModel):
@@ -225,45 +235,33 @@ def map_response(r: SurveyResponse):
     }
 
 # --- ROUTES ---
+
 @app.post("/auth/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-    
-    if hasattr(user, 'is_active') and not user.is_active:
+    if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
-
     access_token = create_access_token(data={"sub": user.email})
-    return {
-        "access_token": access_token, 
-        "token_type": "bearer",
-        "user": map_user(user)
-    }
+    return {"access_token": access_token, "token_type": "bearer", "user": map_user(user)}
 
 @app.get("/users")
 def list_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
         return [map_user(u) for u in db.query(User).all()]
-    
     user_ids = {current_user.id}
-    
     if current_user.role == UserRole.TRAINER:
         roster = db.query(User).filter(User.trainer_id == current_user.id).all()
         for u in roster: user_ids.add(u.id)
-            
     elif current_user.role == UserRole.PLAYER:
         if current_user.trainer_id: user_ids.add(current_user.trainer_id)
         guardians = db.query(User).filter(User.player_id == current_user.id).all()
         for g in guardians: user_ids.add(g.id)
-            
-    elif current_user.role == UserRole.GUARDIAN:
-        if current_user.player_id:
-            user_ids.add(current_user.player_id)
-            child = db.query(User).filter(User.id == current_user.player_id).first()
-            if child and child.trainer_id:
-                user_ids.add(child.trainer_id)
-
+    elif current_user.role == UserRole.GUARDIAN and current_user.player_id:
+        user_ids.add(current_user.player_id)
+        child = db.query(User).filter(User.id == current_user.player_id).first()
+        if child and child.trainer_id: user_ids.add(child.trainer_id)
     users = db.query(User).filter(User.id.in_(list(user_ids)), User.is_active == True).all()
     return [map_user(u) for u in users]
 
@@ -294,49 +292,46 @@ def update_user(user_id: str, data: UserUpdate, current_user: User = Depends(get
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    if data.is_active is False and user.role == UserRole.ADMIN:
-        raise HTTPException(status_code=400, detail="Cannot deactivate an Admin user")
-
+    if not user: raise HTTPException(status_code=404, detail="User not found")
     if data.name is not None: user.name = data.name
     if data.email is not None: user.email = data.email
     if data.mobile is not None: user.mobile = data.mobile
     if data.role is not None: user.role = data.role
-    if data.trainer_id is not None: user.trainer_id = data.trainer_id
-    if data.player_id is not None: user.player_id = data.player_id
-    if data.position is not None: user.position = data.position
+    if data.trainer_id is not None: user.trainer_id = data.trainer_id or None
+    if data.player_id is not None: user.player_id = data.player_id or None
+    if data.position is not None: user.position = data.position or None
     if data.is_active is not None: user.is_active = data.is_active
-    
     db.commit()
-    db.refresh(user)
     return map_user(user)
+
+@app.patch("/users/me/password")
+def change_own_password(data: PasswordChange, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not verify_password(data.currentPassword, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    current_user.password_hash = get_password_hash(data.newPassword)
+    db.commit()
+    return {"message": "Password updated"}
 
 @app.patch("/users/{user_id}/reset-password")
 def admin_reset_password(user_id: str, data: AdminResetPassword, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    if not user: raise HTTPException(status_code=404, detail="User not found")
     user.password_hash = get_password_hash(data.new_password)
     db.commit()
-    return {"detail": "Password reset successfully"}
+    return {"message": "Password reset success"}
 
-# --- TEMPLATE ROUTES ---
 @app.get("/templates")
 def list_templates(db: Session = Depends(get_db)):
-    templates = db.query(SurveyTemplateModel).all()
-    return [map_template(t) for t in templates]
+    return [map_template(t) for t in db.query(SurveyTemplateModel).all()]
 
 @app.post("/templates")
 def create_template(data: TemplateCreateUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
-    new_id = f"t-{os.urandom(4).hex()}"
     db_t = SurveyTemplateModel(
-        id=new_id,
+        id=f"t-{os.urandom(4).hex()}",
         name=data.name,
         ar_name=data.arName,
         description=data.description,
@@ -344,226 +339,165 @@ def create_template(data: TemplateCreateUpdate, current_user: User = Depends(get
         categories=data.categories
     )
     db.add(db_t)
-    try:
-        db.commit()
-        db.refresh(db_t)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    db.commit()
+    db.refresh(db_t)
     return map_template(db_t)
 
 @app.put("/templates/{template_id}")
 def update_template(template_id: str, data: TemplateCreateUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
-    db_t = db.query(SurveyTemplateModel).filter(SurveyTemplateModel.id == template_id).first()
-    if not db_t:
-        raise HTTPException(status_code=404, detail="Template not found")
-    
-    db_t.name = data.name
-    db_t.ar_name = data.arName
-    db_t.description = data.description
-    db_t.ar_description = data.arDescription
-    db_t.categories = data.categories
-    
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    return map_template(db_t)
+    t = db.query(SurveyTemplateModel).filter(SurveyTemplateModel.id == template_id).first()
+    if not t: raise HTTPException(status_code=404, detail="Template not found")
+    t.name = data.name
+    t.ar_name = data.arName
+    t.description = data.description
+    t.ar_description = data.arDescription
+    t.categories = data.categories
+    db.commit()
+    return map_template(t)
 
 @app.delete("/templates/{template_id}")
 def delete_template(template_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
-    db_t = db.query(SurveyTemplateModel).filter(SurveyTemplateModel.id == template_id).first()
-    if not db_t:
-        raise HTTPException(status_code=404, detail="Template not found")
-    db.delete(db_t)
-    db.commit()
-    return {"detail": "Template deleted"}
+    t = db.query(SurveyTemplateModel).filter(SurveyTemplateModel.id == template_id).first()
+    if t:
+        db.delete(t)
+        db.commit()
+    return {"message": "Deleted"}
 
 @app.get("/assignments")
 def get_assignments(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
+        return [map_assignment(a) for a in db.query(SurveyAssignment).all()]
+    
+    # Specific filtering for non-admins
+    if current_user.role == UserRole.TRAINER:
+        # Trainer sees: Their own assignments OR guardian assignments for players they coach
         assignments = db.query(SurveyAssignment).all()
-    else:
-        # Base query for normal users
-        query = db.query(SurveyAssignment)
-        
-        if current_user.role == UserRole.TRAINER:
-            # Rule: Trainer sees evaluations they made OR guardian evaluations for their players
-            # Join with User to check target's trainer_id
-            target_alias = db.query(User).subquery()
-            resp_alias = db.query(User).subquery()
-            
-            assignments = query.filter(
-                or_(
-                    SurveyAssignment.respondent_id == current_user.id,
-                    and_(
-                        db.query(User).filter(User.id == SurveyAssignment.respondent_id).subquery().c.role == UserRole.GUARDIAN,
-                        db.query(User).filter(User.id == SurveyAssignment.target_id).subquery().c.trainer_id == current_user.id
-                    )
-                )
-            ).all()
-            # Refine with manual filter to ensure no player respondents are leaked
-            final_assignments = []
-            for a in assignments:
+        results = []
+        for a in assignments:
+            if a.respondent_id == current_user.id:
+                results.append(a)
+            else:
                 resp = db.query(User).filter(User.id == a.respondent_id).first()
                 target = db.query(User).filter(User.id == a.target_id).first()
-                if a.respondent_id == current_user.id:
-                    final_assignments.append(a)
-                elif resp and resp.role == UserRole.GUARDIAN and target and target.trainer_id == current_user.id:
-                    final_assignments.append(a)
-            return [map_assignment(a) for a in final_assignments]
+                if resp and resp.role == UserRole.GUARDIAN and target and target.trainer_id == current_user.id:
+                    results.append(a)
+        return [map_assignment(a) for a in results]
+    
+    return [map_assignment(a) for a in db.query(SurveyAssignment).filter(
+        or_(
+            SurveyAssignment.respondent_id == current_user.id,
+            SurveyAssignment.target_id == current_user.id,
+            (SurveyAssignment.respondent_id == current_user.player_id if current_user.role == UserRole.GUARDIAN else False),
+            (SurveyAssignment.target_id == current_user.player_id if current_user.role == UserRole.GUARDIAN else False)
+        )
+    ).all()]
 
-        elif current_user.role == UserRole.GUARDIAN:
-            # Rule: Guardian sees self-made OR anything respondent is child OR anything target is child
-            assignments = query.filter(
-                or_(
-                    SurveyAssignment.respondent_id == current_user.id,
-                    SurveyAssignment.respondent_id == current_user.player_id,
-                    SurveyAssignment.target_id == current_user.player_id
-                )
-            ).all()
-
-        elif current_user.role == UserRole.PLAYER:
-            # Rule: Player sees self-made OR surveys targeted at them
-            assignments = query.filter(
-                or_(
-                    SurveyAssignment.respondent_id == current_user.id,
-                    SurveyAssignment.target_id == current_user.id
-                )
-            ).all()
-        else:
-            assignments = []
-
-    return [map_assignment(a) for a in assignments]
+@app.post("/assignments/preview")
+def preview_bulk_assignments(data: AssignmentCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    pairs = []
+    all_users = db.query(User).filter(User.is_active == True).all()
+    user_map = {u.id: u for u in all_users}
+    if data.bulk_type:
+        if data.bulk_type == "GUARDIANS_TO_CHILDREN":
+            pairs = [(u, user_map.get(u.player_id)) for u in all_users if u.role == UserRole.GUARDIAN and u.player_id]
+        elif data.bulk_type == "GUARDIANS_TO_COACHES":
+            for u in all_users:
+                if u.role == UserRole.GUARDIAN and u.player_id:
+                    child = user_map.get(u.player_id)
+                    if child and child.trainer_id:
+                        coach = user_map.get(child.trainer_id)
+                        if coach: pairs.append((u, coach))
+        elif data.bulk_type == "PLAYERS_TO_COACHES":
+            pairs = [(u, user_map.get(u.trainer_id)) for u in all_users if u.role == UserRole.PLAYER and u.trainer_id]
+        elif data.bulk_type == "COACHES_TO_PLAYERS":
+            for u in all_users:
+                if u.role == UserRole.TRAINER:
+                    roster = [p for p in all_users if p.trainer_id == u.id]
+                    for p in roster: pairs.append((u, p))
+    elif data.respondent_ids and data.target_ids:
+        for r_id in data.respondent_ids:
+            for t_id in data.target_ids:
+                r = user_map.get(r_id); t = user_map.get(t_id)
+                if r and t: pairs.append((r, t))
+    return [{"respondent": map_user(r), "target": map_user(t), "alreadyExists": db.query(SurveyAssignment).filter(SurveyAssignment.template_id == data.template_id, SurveyAssignment.respondent_id == r.id, SurveyAssignment.target_id == t.id, SurveyAssignment.month == data.month).first() is not None} for r, t in pairs if r and t]
 
 @app.post("/assignments")
 def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
-    
-    new_assignments = []
-    targets = data.target_ids if data.target_ids and len(data.target_ids) > 0 else [None]
-    
-    for r_id in data.respondent_ids:
-        # Safety for Guardians: If respondent is guardian, restrict target to their child
-        resp_user = db.query(User).filter(User.id == r_id).first()
-        actual_targets = targets
-        if resp_user and resp_user.role == UserRole.GUARDIAN and resp_user.player_id:
-            actual_targets = [resp_user.player_id]
-
-        for t_id in actual_targets:
-            final_target = t_id if t_id else r_id
-            existing = db.query(SurveyAssignment).filter(
-                SurveyAssignment.template_id == data.template_id,
-                SurveyAssignment.respondent_id == r_id,
-                SurveyAssignment.target_id == final_target,
-                SurveyAssignment.month == data.month
-            ).first()
-            if not existing:
-                a = SurveyAssignment(
-                    id=f"a-{os.urandom(4).hex()}",
-                    template_id=data.template_id,
-                    assigner_id=current_user.id,
-                    respondent_id=r_id,
-                    target_id=final_target,
-                    month=data.month,
-                    status='PENDING'
-                )
-                db.add(a)
-                new_assignments.append(a)
-    
+    pairs = []
+    all_users = db.query(User).filter(User.is_active == True).all()
+    user_map = {u.id: u for u in all_users}
+    if data.bulk_type:
+        if data.bulk_type == "GUARDIANS_TO_CHILDREN":
+            pairs = [(u.id, u.player_id) for u in all_users if u.role == UserRole.GUARDIAN and u.player_id]
+        elif data.bulk_type == "GUARDIANS_TO_COACHES":
+            for u in all_users:
+                if u.role == UserRole.GUARDIAN and u.player_id:
+                    child = user_map.get(u.player_id)
+                    if child and child.trainer_id: pairs.append((u.id, child.trainer_id))
+        elif data.bulk_type == "PLAYERS_TO_COACHES":
+            pairs = [(u.id, u.trainer_id) for u in all_users if u.role == UserRole.PLAYER and u.trainer_id]
+        elif data.bulk_type == "COACHES_TO_PLAYERS":
+            for u in all_users:
+                if u.role == UserRole.TRAINER:
+                    roster = [p.id for p in all_users if p.trainer_id == u.id]
+                    for p_id in roster: pairs.append((u.id, p_id))
+    elif data.respondent_ids and data.target_ids:
+        for r in data.respondent_ids:
+            for t in data.target_ids: pairs.append((r, t))
+    new_count = 0
+    for r_id, t_id in pairs:
+        if not db.query(SurveyAssignment).filter(SurveyAssignment.template_id == data.template_id, SurveyAssignment.respondent_id == r_id, SurveyAssignment.target_id == t_id, SurveyAssignment.month == data.month).first():
+            db.add(SurveyAssignment(id=f"a-{os.urandom(4).hex()}", template_id=data.template_id, assigner_id=current_user.id, respondent_id=r_id, target_id=t_id, month=data.month))
+            new_count += 1
     db.commit()
-    return {"count": len(new_assignments)}
+    return {"count": new_count}
 
 @app.delete("/assignments/{assignment_id}")
 def delete_assignment(assignment_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
-    db_assign = db.query(SurveyAssignment).filter(SurveyAssignment.id == assignment_id).first()
-    if not db_assign:
-        raise HTTPException(status_code=404, detail="Assignment not found")
-    
-    # If the assignment is COMPLETED, we should also delete the response
-    if db_assign.status == 'COMPLETED':
-        db_res = db.query(SurveyResponse).filter(
-            SurveyResponse.template_id == db_assign.template_id,
-            SurveyResponse.user_id == db_assign.respondent_id,
-            SurveyResponse.target_player_id == db_assign.target_id,
-            SurveyResponse.month == db_assign.month
-        ).first()
-        if db_res:
-            db.delete(db_res)
-            
-    db.delete(db_assign)
-    db.commit()
-    return {"detail": "Assignment deleted successfully"}
+    a = db.query(SurveyAssignment).filter(SurveyAssignment.id == assignment_id).first()
+    if a:
+        db.delete(a); db.commit()
+    return {"message": "Deleted"}
 
 @app.get("/responses")
 def get_responses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == UserRole.ADMIN:
+        return [map_response(r) for r in db.query(SurveyResponse).all()]
+    
+    if current_user.role == UserRole.TRAINER:
         responses = db.query(SurveyResponse).all()
-    else:
-        # Base query
-        query = db.query(SurveyResponse)
-        
-        if current_user.role == UserRole.TRAINER:
-            # Rule: Trainer sees responses they made OR guardian responses for their players
-            responses = query.all()
-            final_responses = []
-            for r in responses:
-                resp_user = db.query(User).filter(User.id == r.user_id).first()
-                target_user = db.query(User).filter(User.id == r.target_player_id).first()
-                
-                # Check if trainer is respondent
-                if r.user_id == current_user.id:
-                    final_responses.append(r)
-                # Check if respondent is guardian and target is their player
-                elif resp_user and resp_user.role == UserRole.GUARDIAN and target_user and target_user.trainer_id == current_user.id:
-                    final_responses.append(r)
-            return [map_response(r) for r in final_responses]
-
-        elif current_user.role == UserRole.GUARDIAN:
-            # Rule: Guardian sees self-made OR child respondent OR child target
-            responses = query.filter(
-                or_(
-                    SurveyResponse.user_id == current_user.id,
-                    SurveyResponse.user_id == current_user.player_id,
-                    SurveyResponse.target_player_id == current_user.player_id
-                )
-            ).all()
-
-        elif current_user.role == UserRole.PLAYER:
-            # Rule: Player sees self-made OR Targeted at them
-            responses = query.filter(
-                or_(
-                    SurveyResponse.user_id == current_user.id,
-                    SurveyResponse.target_player_id == current_user.id
-                )
-            ).all()
-        else:
-            responses = []
-
-    return [map_response(r) for r in responses]
+        results = []
+        for r in responses:
+            if r.user_id == current_user.id:
+                results.append(r)
+            else:
+                target = db.query(User).filter(User.id == r.target_player_id).first()
+                if target and target.trainer_id == current_user.id:
+                    results.append(r)
+        return [map_response(r) for r in results]
+    
+    return [map_response(r) for r in db.query(SurveyResponse).filter(
+        or_(
+            SurveyResponse.user_id == current_user.id,
+            SurveyResponse.target_player_id == current_user.id,
+            (SurveyResponse.user_id == current_user.player_id if current_user.role == UserRole.GUARDIAN else False),
+            (SurveyResponse.target_player_id == current_user.player_id if current_user.role == UserRole.GUARDIAN else False)
+        )
+    ).all()]
 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    assignment = db.query(SurveyAssignment).filter(
-        SurveyAssignment.template_id == res.template_id.strip(),
-        SurveyAssignment.respondent_id == current_user.id.strip(),
-        SurveyAssignment.target_id == res.target_player_id.strip(),
-        SurveyAssignment.month == res.month.strip()
-    ).first()
-
-    current_month_str = datetime.utcnow().strftime("%Y-%m")
-    
-    if res.month > current_month_str and current_user.role != UserRole.ADMIN and not assignment:
-        raise HTTPException(status_code=400, detail="Future month assessments require an assignment.")
-
+    assignment = db.query(SurveyAssignment).filter(SurveyAssignment.template_id == res.template_id, SurveyAssignment.respondent_id == current_user.id, SurveyAssignment.target_id == res.target_player_id, SurveyAssignment.month == res.month).first()
     db_res = SurveyResponse(
         id=f"sr-{os.urandom(4).hex()}",
         template_id=res.template_id,
@@ -571,118 +505,21 @@ def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_
         target_player_id=res.target_player_id,
         month=res.month,
         answers=res.answers,
-        weighted_score=res.weighted_score,
-        date=datetime.utcnow()
+        weighted_score=res.weighted_score
     )
     db.add(db_res)
-    
-    if assignment:
-        assignment.status = 'COMPLETED'
-    
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Database error during submission")
-        
+    if assignment: assignment.status = 'COMPLETED'
+    db.commit()
     return map_response(db_res)
 
 @app.delete("/responses/{response_id}")
 def delete_response(response_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
-    db_res = db.query(SurveyResponse).filter(SurveyResponse.id == response_id).first()
-    if not db_res:
-        raise HTTPException(status_code=404, detail="Response not found")
+    r = db.query(SurveyResponse).filter(SurveyResponse.id == response_id).first()
+    if r:
+        assignment = db.query(SurveyAssignment).filter(SurveyAssignment.template_id == r.template_id, SurveyAssignment.respondent_id == r.user_id, SurveyAssignment.target_id == r.target_player_id, SurveyAssignment.month == r.month).first()
+        if assignment: assignment.status = 'PENDING'
+        db.delete(r); db.commit()
+    return {"message": "Deleted"}
     
-    # Revert assignment status
-    assignment = db.query(SurveyAssignment).filter(
-        SurveyAssignment.template_id == db_res.template_id,
-        SurveyAssignment.respondent_id == db_res.user_id,
-        SurveyAssignment.target_id == db_res.target_player_id,
-        SurveyAssignment.month == db_res.month
-    ).first()
-    if assignment:
-        assignment.status = 'PENDING'
-    
-    db.delete(db_res)
-    db.commit()
-    return {"detail": "Response deleted and assignment reverted"}
-
-@app.on_event("startup")
-def setup_logic():
-    db = SessionLocal()
-    
-    # --- MIGRATIONS ---
-    try:
-        db.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE"))
-        db.commit()
-    except Exception:
-        db.rollback()
-
-    try:
-        db.execute(text("ALTER TABLE users ADD COLUMN position VARCHAR"))
-        db.commit()
-    except Exception:
-        db.rollback()
-
-    # --- SEED DATA WITH ID CHECKS ---
-    admin_id = "u-admin-1"
-    admin_email = "admin@footpulse.app"
-    admin = db.query(User).filter(User.id == admin_id).first()
-    if not admin:
-        existing_email_user = db.query(User).filter(User.email == admin_email).first()
-        if not existing_email_user:
-            admin = User(
-                id=admin_id, 
-                name="Academy Director", 
-                email=admin_email, 
-                password_hash=get_password_hash("password123"), 
-                mobile="+44 7700 900000", 
-                role=UserRole.ADMIN, 
-                avatar="https://picsum.photos/200/200?random=1",
-                is_active=True
-            )
-            db.add(admin)
-    else:
-        admin.password_hash = get_password_hash("password123")
-        admin.is_active = True
-    
-    trainer_id = "u-trainer-1"
-    trainer_email = "mike@footpulse.app"
-    trainer = db.query(User).filter(User.id == trainer_id).first()
-    if not trainer:
-        if not db.query(User).filter(User.email == trainer_email).first():
-            trainer = User(
-                id=trainer_id, 
-                name="Coach Mike Johnson", 
-                email=trainer_email, 
-                password_hash=get_password_hash("password123"), 
-                mobile="+44 7700 900001", 
-                role=UserRole.TRAINER, 
-                avatar="https://picsum.photos/200/200?random=2", 
-                is_active=True
-            )
-            db.add(trainer)
-    
-    player_id = "u-player-1"
-    player_email = "leo@footpulse.app"
-    player = db.query(User).filter(User.id == player_id).first()
-    if not player:
-        if not db.query(User).filter(User.email == player_email).first():
-            player = User(
-                id=player_id, 
-                name="Leo Messi Jr.", 
-                email=player_email, 
-                password_hash=get_password_hash("password123"), 
-                mobile="+44 7700 900002", 
-                role=UserRole.PLAYER, 
-                trainer_id="u-trainer-1", 
-                position="Forward", 
-                avatar="https://picsum.photos/200/200?random=3", 
-                is_active=True
-            )
-            db.add(player)
-    
-    db.commit()
-    db.close()

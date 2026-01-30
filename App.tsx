@@ -16,7 +16,8 @@ import {
   Lock,
   User as UserIcon,
   FileText,
-  PieChart
+  PieChart,
+  LineChart as LineChartIcon
 } from 'lucide-react';
 import { 
   User, 
@@ -35,6 +36,7 @@ import SurveyList from './components/SurveyList';
 import SurveyForm from './components/SurveyForm';
 import Analytics from './components/Analytics';
 import SurveyAnalytics from './components/SurveyAnalytics';
+import QuestionTrends from './components/QuestionTrends';
 import Login from './components/Login';
 import FootPulseLogo from './components/Logo';
 
@@ -104,6 +106,7 @@ const App: React.FC = () => {
       { id: 'surveys', label: t.surveys, icon: <ClipboardList className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'analytics', label: t.analytics, icon: <TrendingUp className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
       { id: 'survey-analytics', label: t.surveyAnalytics, icon: <PieChart className="w-5 h-5" />, roles: [UserRole.ADMIN] },
+      { id: 'question-trends', label: t.questionTrends, icon: <LineChartIcon className="w-5 h-5" />, roles: [UserRole.ADMIN] },
       { id: 'users', label: t.users, icon: <Users className="w-5 h-5" />, roles: [UserRole.ADMIN] },
       { id: 'templates', label: t.templates, icon: <FileText className="w-5 h-5" />, roles: [UserRole.ADMIN] },
     ];
@@ -342,6 +345,14 @@ const App: React.FC = () => {
               )}
               {activeTab === 'survey-analytics' && (
                 <SurveyAnalytics 
+                  users={users} 
+                  templates={templates}
+                  responses={responses} 
+                  lang={lang}
+                />
+              )}
+              {activeTab === 'question-trends' && (
+                <QuestionTrends 
                   users={users} 
                   templates={templates}
                   responses={responses} 
