@@ -12,13 +12,11 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
-  AreaChart,
-  Area,
   LineChart,
   Line,
   Legend
 } from 'recharts';
-import { Filter, TrendingUp, Target, Zap, Shield, ChevronDown, Layout, Users, Check, Calendar, Activity, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { Filter, TrendingUp, Target, Zap, Shield, ChevronDown, Layout, Users, Check, Calendar, Activity, ArrowUpRight, ArrowDownRight, Minus, BarChart3 } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -166,7 +164,11 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     [responses, selectedPlayerIds, selectedMonths, selectedTrainerIds, user, users]
   );
 
-  // Multi-Player Trend Data Logic
+  const selectionAvg = useMemo(() => {
+    if (playerResponses.length === 0) return 0;
+    return Math.round(playerResponses.reduce((a, b) => a + b.weightedScore, 0) / playerResponses.length);
+  }, [playerResponses]);
+
   const multiTrendData = useMemo(() => {
     const months = Array.from(selectedMonths).sort();
     const playersInView = Array.from(selectedPlayerIds);
@@ -183,7 +185,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         }
       });
       return row;
-    }).filter(row => Object.keys(row).length > 1); // Only show months with at least one player score
+    }).filter(row => Object.keys(row).length > 1); 
   }, [playerResponses, selectedPlayerIds, selectedMonths, users]);
 
   const categoryTrendDelta = useMemo(() => {
@@ -278,7 +280,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
   }, [responses, templates, selectedPlayerIds, selectedMonths, isRtl, users]);
 
   return (
-    <div className={`animate-in fade-in duration-500 space-y-8 ${isRtl ? 'text-right font-arabic' : ''}`}>
+    <div className={`animate-in fade-in duration-500 space-y-8 pb-20 ${isRtl ? 'text-right font-arabic' : ''}`}>
       <div className={`flex flex-col md:flex-row md:items-center justify-between gap-6 ${isRtl ? 'md:flex-row-reverse' : ''}`}>
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">{t.dataInsights}</h2>
@@ -300,84 +302,119 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         </div>
       ) : (
         <div className="space-y-8">
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-             <div className="xl:col-span-1 space-y-6">
-                <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">{isRtl ? 'تطور الفئات' : 'Category Growth'}</h4>
-                   <div className="space-y-4">
+          {/* Row 1: Selection Avg on a single line */}
+          <div className={`bg-slate-900 p-8 rounded-[40px] text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
+             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2"></div>
+             <div className={`z-10 ${isRtl ? 'text-right' : ''}`}>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{isRtl ? 'متوسط الاختيار العام' : 'Overall Selection Average'}</p>
+                <div className={`flex items-baseline gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                   <h3 className="text-6xl font-black text-white">{selectionAvg}%</h3>
+                   <span className="text-emerald-400 font-bold text-sm tracking-tight">{isRtl ? 'من إجمالي ' : 'Across '}{playerResponses.length}{isRtl ? ' تقرير' : ' Reports'}</span>
+                </div>
+             </div>
+             <div className="flex gap-4 z-10">
+                <div className="px-6 py-4 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'الفترة' : 'Period'}</p>
+                   <p className="text-sm font-black text-white">{selectedMonths.size} {isRtl ? 'شهور' : 'Months'}</p>
+                </div>
+                <div className="px-6 py-4 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'اللاعبون' : 'Players'}</p>
+                   <p className="text-sm font-black text-white">{selectedPlayerIds.size} {isRtl ? 'لاعب' : 'Users'}</p>
+                </div>
+             </div>
+          </div>
+
+          {/* Row 2: Category Growth and Competency Profile on a single line */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+             <div className="lg:col-span-4 space-y-6">
+                <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm h-full flex flex-col">
+                   <div className={`flex items-center justify-between mb-8 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                      <h4 className="text-xl font-black text-slate-900 tracking-tight">{isRtl ? 'نمو الفئات' : 'Category Growth'}</h4>
+                      <BarChart3 className="w-5 h-5 text-slate-300" />
+                   </div>
+                   <div className="space-y-4 flex-1 overflow-y-auto no-scrollbar pr-2">
                       {categoryTrendDelta.map((item, idx) => (
-                         <div key={idx} className={`flex items-center justify-between p-3 bg-slate-50 rounded-2xl ${isRtl ? 'flex-row-reverse' : ''}`}>
-                            <span className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{item.name}</span>
-                            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-black ${item.delta > 0 ? 'text-emerald-600 bg-emerald-50' : item.delta < 0 ? 'text-rose-600 bg-rose-50' : 'text-slate-400 bg-slate-100'}`}>
-                               {item.delta > 0 ? <ArrowUpRight className="w-3 h-3" /> : item.delta < 0 ? <ArrowDownRight className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+                         <div key={idx} className={`flex items-center justify-between p-4 bg-slate-50 rounded-3xl group hover:bg-emerald-50 transition-colors ${isRtl ? 'flex-row-reverse' : ''}`}>
+                            <div className={`flex flex-col ${isRtl ? 'text-right' : ''}`}>
+                               <span className="text-xs font-black text-slate-900 truncate max-w-[140px]">{item.name}</span>
+                               <span className="text-[10px] font-bold text-slate-400">{isRtl ? 'الحالي: ' : 'Current: '}{item.current}%</span>
+                            </div>
+                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black ${item.delta > 0 ? 'text-emerald-600 bg-emerald-100' : item.delta < 0 ? 'text-rose-600 bg-rose-100' : 'text-slate-400 bg-slate-100'}`}>
+                               {item.delta > 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : item.delta < 0 ? <ArrowDownRight className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
                                {Math.abs(item.delta)}%
                             </div>
                          </div>
                       ))}
-                      {categoryTrendDelta.length === 0 && <p className="text-[10px] text-slate-400 italic text-center">Need 2+ months for trends</p>}
+                      {categoryTrendDelta.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400">
+                           <Calendar className="w-8 h-8 mb-2 opacity-20" />
+                           <p className="text-[10px] font-bold italic">Need 2+ months for trends</p>
+                        </div>
+                      )}
                    </div>
-                </div>
-
-                <div className={`bg-slate-900 p-8 rounded-[32px] text-white overflow-hidden relative ${isRtl ? 'text-right' : ''}`}>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">{isRtl ? 'متوسط الاختيار' : 'Selection Avg'}</p>
-                    <h3 className="text-4xl font-black">{Math.round(playerResponses.reduce((a,b)=>a+b.weightedScore,0)/playerResponses.length)}%</h3>
-                    <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                       <span>{playerResponses.length} {isRtl ? 'استجابة' : 'Reports'}</span>
-                       <Activity className="w-4 h-4 text-emerald-500" />
-                    </div>
                 </div>
              </div>
 
-             <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col h-[450px]">
-                   <h3 className="text-lg font-bold text-slate-900 mb-6">{t.competencyProfile}</h3>
+             <div className="lg:col-span-8">
+                <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm h-full flex flex-col min-h-[500px]">
+                   <div className={`flex items-center justify-between mb-8 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                      <h3 className="text-xl font-black text-slate-900 tracking-tight">{t.competencyProfile}</h3>
+                      <Target className="w-5 h-5 text-slate-300" />
+                   </div>
                    <div className="flex-1">
                      <ResponsiveContainer width="100%" height="100%">
                        <RadarChart data={radarData}>
                          <PolarGrid stroke="#e2e8f0" />
-                         <PolarAngleAxis dataKey="subject" tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} />
+                         <PolarAngleAxis dataKey="subject" tick={{fill: '#64748b', fontSize: 11, fontWeight: 800}} />
                          <PolarRadiusAxis domain={[0, 100]} axisLine={false} tick={false} />
-                         <Radar name={isRtl ? "المختار" : "Selected"} dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.6} />
-                         <Radar name={isRtl ? "الأكاديمية" : "Academy"} dataKey="B" stroke="#64748b" fill="#94a3b8" fillOpacity={0.1} />
-                         <Tooltip />
-                         <Legend iconType="circle" wrapperStyle={{ paddingTop: 20 }} />
+                         <Radar name={isRtl ? "المختار" : "Selected"} dataKey="A" stroke="#10b981" strokeWidth={3} fill="#10b981" fillOpacity={0.5} />
+                         <Radar name={isRtl ? "الأكاديمية" : "Academy"} dataKey="B" stroke="#64748b" strokeWidth={2} fill="#94a3b8" fillOpacity={0.05} />
+                         <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
+                         <Legend iconType="circle" wrapperStyle={{ paddingTop: 30 }} />
                        </RadarChart>
                      </ResponsiveContainer>
                    </div>
                 </div>
+             </div>
+          </div>
 
-                <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col h-[450px]">
-                   <div className={`flex items-center justify-between mb-6 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      <h3 className="text-lg font-bold text-slate-900">{t.growthPath}</h3>
-                      <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-widest">Comparison Mode</div>
-                   </div>
-                   <div className="flex-1">
-                      <ResponsiveContainer width="100%" height="100%">
-                         <LineChart data={multiTrendData}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} dy={10} reversed={isRtl} />
-                            <YAxis orientation={isRtl ? 'right' : 'left'} domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} dx={isRtl ? 5 : -5} />
-                            <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                            <Legend wrapperStyle={{ paddingTop: 20 }} />
-                            {selectedPlayerIds.size > 0 && Array.from(selectedPlayerIds).map((pId, idx) => {
-                               const player = users.find(u => u.id === pId);
-                               if (!player) return null;
-                               return (
-                                 <Line 
-                                   key={pId}
-                                   type="monotone" 
-                                   dataKey={player.name} 
-                                   stroke={LINE_COLORS[idx % LINE_COLORS.length]} 
-                                   strokeWidth={idx === 0 ? 4 : 2} 
-                                   dot={{ r: 4, strokeWidth: 2, stroke: '#fff' }} 
-                                   activeDot={{ r: 6 }}
-                                 />
-                               );
-                            })}
-                         </LineChart>
-                      </ResponsiveContainer>
-                   </div>
+          {/* Row 3: Growth Path on a single line */}
+          <div className="bg-white p-8 md:p-12 rounded-[40px] border border-slate-200 shadow-sm flex flex-col h-[550px]">
+             <div className={`flex items-center justify-between mb-10 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                <div className={isRtl ? 'text-right' : ''}>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">{t.growthPath}</h3>
+                   <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{isRtl ? 'تحليل مقارن للنمو عبر الزمن' : 'Comparative Growth Analysis Over Time'}</p>
                 </div>
+                <div className="px-5 py-2 bg-emerald-50 text-emerald-600 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                   <Zap className="w-3 h-3" />
+                   {isRtl ? 'وضع المقارنة' : 'Comparison Mode'}
+                </div>
+             </div>
+             <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                   <LineChart data={multiTrendData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 700}} dy={12} reversed={isRtl} />
+                      <YAxis orientation={isRtl ? 'right' : 'left'} domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 700}} dx={isRtl ? 10 : -10} />
+                      <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)', padding: '20px' }} />
+                      <Legend wrapperStyle={{ paddingTop: 40 }} iconType="circle" />
+                      {selectedPlayerIds.size > 0 && Array.from(selectedPlayerIds).map((pId, idx) => {
+                         const player = users.find(u => u.id === pId);
+                         if (!player) return null;
+                         return (
+                           <Line 
+                             key={pId}
+                             type="monotone" 
+                             dataKey={player.name} 
+                             stroke={LINE_COLORS[idx % LINE_COLORS.length]} 
+                             strokeWidth={4} 
+                             dot={{ r: 6, strokeWidth: 3, stroke: '#fff' }} 
+                             activeDot={{ r: 10, strokeWidth: 0 }}
+                           />
+                         );
+                      })}
+                   </LineChart>
+                </ResponsiveContainer>
              </div>
           </div>
         </div>
