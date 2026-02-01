@@ -16,7 +16,7 @@ import {
   Line,
   Legend
 } from 'recharts';
-import { Filter, TrendingUp, Target, Zap, Shield, ChevronDown, Layout, Users, Check, Calendar, Activity, ArrowUpRight, ArrowDownRight, Minus, BarChart3 } from 'lucide-react';
+import { Filter, TrendingUp, Target, Zap, Shield, ChevronDown, Layout, Users, Check, Calendar, Activity, ArrowUpRight, ArrowDownRight, Minus, BarChart3, FileText } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -61,7 +61,7 @@ const MultiSelect: React.FC<{
         <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
            {icon}
            <span className="truncate max-w-[120px]">
-             {selected.size === 0 ? `No ${label}` : selected.size === options.length ? `All ${label}` : `${selected.size} ${label}`}
+             {selected.size === 0 ? (isRtl ? `كل ${label}` : `All ${label}`) : selected.size === options.length ? (isRtl ? `كل ${label}` : `All ${label}`) : `${selected.size} ${label}`}
            </span>
         </div>
         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -73,7 +73,7 @@ const MultiSelect: React.FC<{
           <div className={`absolute z-50 mt-2 w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl p-2 animate-in zoom-in-95 duration-200 ${isRtl ? 'right-0' : 'left-0'}`}>
             <div className={`flex items-center justify-between p-2 mb-2 border-b border-slate-50 ${isRtl ? 'flex-row-reverse' : ''}`}>
                <button type="button" onClick={isAllSelected ? deselectAll : selectAll} className="text-[10px] font-black text-emerald-600 uppercase hover:underline">
-                 {isAllSelected ? 'Deselect All' : 'Select All'}
+                 {isAllSelected ? (isRtl ? 'إلغاء الكل' : 'Deselect All') : (isRtl ? 'تحديد الكل' : 'Select All')}
                </button>
                <span className="text-[10px] font-black text-slate-400 uppercase">{options.length} {label}</span>
             </div>
@@ -107,6 +107,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
   }, [responses]);
 
   const [selectedTrainerIds, setSelectedTrainerIds] = useState<Set<string>>(new Set());
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set(availableMonths.map(m => m.id)));
 
   const availablePlayers = useMemo(() => {
@@ -133,6 +134,12 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     setSelectedTrainerIds(next);
   };
 
+  const toggleTemplate = (id: string) => {
+    const next = new Set(selectedTemplateIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedTemplateIds(next);
+  };
+
   const togglePlayer = (id: string) => {
     const next = new Set(selectedPlayerIds);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -152,6 +159,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       const trainerMatch = selectedTrainerIds.size === 0 || (targetPlayer.trainerId && selectedTrainerIds.has(targetPlayer.trainerId));
       const playerMatch = selectedPlayerIds.size === 0 || selectedPlayerIds.has(r.targetPlayerId);
       const monthMatch = selectedMonths.size === 0 || selectedMonths.has(r.month);
+      const templateMatch = selectedTemplateIds.size === 0 || selectedTemplateIds.has(r.templateId);
       
       let roleMatch = false;
       if (user.role === UserRole.ADMIN) roleMatch = true;
@@ -159,9 +167,9 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       else if (user.role === UserRole.GUARDIAN) roleMatch = targetPlayer.id === user.playerId;
       else if (user.role === UserRole.PLAYER) roleMatch = targetPlayer.id === user.id;
 
-      return trainerMatch && playerMatch && monthMatch && roleMatch;
+      return trainerMatch && playerMatch && monthMatch && templateMatch && roleMatch;
     }),
-    [responses, selectedPlayerIds, selectedMonths, selectedTrainerIds, user, users]
+    [responses, selectedPlayerIds, selectedMonths, selectedTrainerIds, selectedTemplateIds, user, users]
   );
 
   const selectionAvg = useMemo(() => {
@@ -242,7 +250,10 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     const allUniqueCats = new Set<string>();
 
     responses.forEach(res => {
+      // Baseline filtering
       if (selectedMonths.size > 0 && !selectedMonths.has(res.month)) return;
+      if (selectedTemplateIds.size > 0 && !selectedTemplateIds.has(res.templateId)) return;
+      
       const template = templates.find(tpl => tpl.id === res.templateId);
       if (!template) return;
 
@@ -277,7 +288,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       A: individualCategories[catName] ? Math.round(individualCategories[catName].sum / individualCategories[catName].count) : 0,
       B: squadCategories[catName] ? Math.round(squadCategories[catName].sum / squadCategories[catName].count) : 0,
     })).filter(d => d.A > 0 || d.B > 0);
-  }, [responses, templates, selectedPlayerIds, selectedMonths, isRtl, users]);
+  }, [responses, templates, selectedPlayerIds, selectedMonths, selectedTemplateIds, isRtl, users]);
 
   return (
     <div className={`animate-in fade-in duration-500 space-y-8 pb-20 ${isRtl ? 'text-right font-arabic' : ''}`}>
@@ -288,10 +299,47 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         </div>
         <div className={`flex flex-wrap items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
           {isAdmin && (
-            <MultiSelect label={isRtl ? 'المدربين' : 'Coaches'} icon={<Activity className="w-4 h-4 text-blue-500" />} options={availableTrainers.map(u => ({ id: u.id, name: u.name }))} selected={selectedTrainerIds} toggle={toggleTrainer} selectAll={() => setSelectedTrainerIds(new Set(availableTrainers.map(u => u.id)))} deselectAll={() => setSelectedTrainerIds(new Set())} isRtl={isRtl} />
+            <MultiSelect 
+              label={isRtl ? 'المدربين' : 'Coaches'} 
+              icon={<Activity className="w-4 h-4 text-blue-500" />} 
+              options={availableTrainers.map(u => ({ id: u.id, name: u.name }))} 
+              selected={selectedTrainerIds} 
+              toggle={toggleTrainer} 
+              selectAll={() => setSelectedTrainerIds(new Set(availableTrainers.map(u => u.id)))} 
+              deselectAll={() => setSelectedTrainerIds(new Set())} 
+              isRtl={isRtl} 
+            />
           )}
-          <MultiSelect label={isRtl ? 'اللاعبين' : 'Players'} icon={<Users className="w-4 h-4 text-slate-400" />} options={availablePlayers.map(p => ({ id: p.id, name: p.name }))} selected={selectedPlayerIds} toggle={togglePlayer} selectAll={() => setSelectedPlayerIds(new Set(availablePlayers.map(p => p.id)))} deselectAll={() => setSelectedPlayerIds(new Set())} isRtl={isRtl} />
-          <MultiSelect label={isRtl ? 'الشهور' : 'Months'} icon={<Calendar className="w-4 h-4 text-slate-400" />} options={availableMonths} selected={selectedMonths} toggle={toggleMonth} selectAll={() => setSelectedMonths(new Set(availableMonths.map(m => m.id)))} deselectAll={() => setSelectedMonths(new Set())} isRtl={isRtl} />
+          <MultiSelect 
+            label={isRtl ? 'الاستبيانات' : 'Surveys'} 
+            icon={<FileText className="w-4 h-4 text-purple-500" />} 
+            options={templates.map(tpl => ({ id: tpl.id, name: isRtl ? tpl.arName : tpl.name }))} 
+            selected={selectedTemplateIds} 
+            toggle={toggleTemplate} 
+            selectAll={() => setSelectedTemplateIds(new Set(templates.map(tpl => tpl.id)))} 
+            deselectAll={() => setSelectedTemplateIds(new Set())} 
+            isRtl={isRtl} 
+          />
+          <MultiSelect 
+            label={isRtl ? 'اللاعبين' : 'Players'} 
+            icon={<Users className="w-4 h-4 text-slate-400" />} 
+            options={availablePlayers.map(p => ({ id: p.id, name: p.name }))} 
+            selected={selectedPlayerIds} 
+            toggle={togglePlayer} 
+            selectAll={() => setSelectedPlayerIds(new Set(availablePlayers.map(p => p.id)))} 
+            deselectAll={() => setSelectedPlayerIds(new Set())} 
+            isRtl={isRtl} 
+          />
+          <MultiSelect 
+            label={isRtl ? 'الشهور' : 'Months'} 
+            icon={<Calendar className="w-4 h-4 text-slate-400" />} 
+            options={availableMonths} 
+            selected={selectedMonths} 
+            toggle={toggleMonth} 
+            selectAll={() => setSelectedMonths(new Set(availableMonths.map(m => m.id)))} 
+            deselectAll={() => setSelectedMonths(new Set())} 
+            isRtl={isRtl} 
+          />
         </div>
       </div>
 
