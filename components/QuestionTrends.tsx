@@ -8,8 +8,7 @@ import {
   Tooltip, 
   ResponsiveContainer,
   AreaChart,
-  Area,
-  Star as StarIcon
+  Area
 } from 'recharts';
 import { User as UserIcon, FileText, Target, Activity, Star, LayoutList, AlertCircle, Layers } from 'lucide-react';
 import { translations } from '../translations';
