@@ -10,7 +10,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { User as UserIcon, FileText, Target, Activity, Star, LayoutList, AlertCircle, Layers, TrendingDown } from 'lucide-react';
+import { User as UserIcon, FileText, Target, Activity, Star, LayoutList, AlertCircle, Layers, TrendingDown, AlertTriangle } from 'lucide-react';
 import { translations } from '../translations';
 
 interface QuestionTrendsProps {
@@ -59,7 +59,7 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
     return (sum / filteredResponses.length).toFixed(1);
   };
 
-  // Logic to detect sequential degradation in last 3 evaluations
+  // Logic to detect sequential degradation in last 3 evaluations (standard decline)
   const checkDegradation = (qId: string) => {
     const data = getQuestionChartData(qId);
     if (data.length < 3) return false;
@@ -68,12 +68,21 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
     return last3[2].score < last3[1].score && last3[1].score < last3[0].score;
   };
 
+  // Logic to detect sharp decline (drop of 2 or more points between last two surveys)
+  const checkSharpDecline = (qId: string) => {
+    const data = getQuestionChartData(qId);
+    if (data.length < 2) return false;
+    const last = data[data.length - 1].score;
+    const prev = data[data.length - 2].score;
+    return (prev - last) >= 2;
+  };
+
   return (
     <div className={`space-y-8 animate-in fade-in duration-500 pb-20 ${isRtl ? 'text-right font-arabic' : ''}`}>
       <header>
         <h2 className="text-3xl font-black text-slate-900 tracking-tight">{isRtl ? 'نبض الأسئلة الفردية' : 'Individual Question Pulse'}</h2>
         <p className="text-slate-500 font-medium">
-          {isRtl ? 'تحليل تفصيلي لكل مقياس مصنف حسب فئات التقييم مع تنبيهات التراجع.' : 'Detailed trend analysis categorized by evaluation domains with automated degradation alerts.'}
+          {isRtl ? 'تحليل تفصيلي لكل مقياس مصنف حسب فئات التقييم مع تنبيهات التراجع والإنخفاض الحاد.' : 'Detailed trend analysis categorized by evaluation domains with sequential degradation and sharp drop alerts.'}
         </p>
       </header>
 
@@ -145,15 +154,19 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {cat.questions.map((q, qIdx) => {
                   const isDegrading = checkDegradation(q.id);
-                  const accentColor = isDegrading ? '#f43f5e' : (catIdx % 2 === 0 ? '#10b981' : '#3b82f6');
-                  const bgColor = isDegrading ? 'bg-rose-50' : 'bg-white';
+                  const isSharpDecline = checkSharpDecline(q.id);
+                  const isCritical = isDegrading || isSharpDecline;
+                  
+                  const accentColor = isSharpDecline ? '#f97316' : (isDegrading ? '#f43f5e' : (catIdx % 2 === 0 ? '#10b981' : '#3b82f6'));
+                  const bgColor = isCritical ? (isSharpDecline ? 'bg-amber-50' : 'bg-rose-50') : 'bg-white';
+                  const borderColor = isSharpDecline ? 'border-amber-200' : (isDegrading ? 'border-rose-200' : 'border-slate-200');
 
                   return (
-                    <div key={q.id} className={`${bgColor} p-6 md:p-8 rounded-[40px] border ${isDegrading ? 'border-rose-200 shadow-rose-100 shadow-xl' : 'border-slate-200 shadow-sm'} flex flex-col h-[420px] hover:border-emerald-200 transition-all`}>
+                    <div key={q.id} className={`${bgColor} p-6 md:p-8 rounded-[40px] border ${borderColor} ${isCritical ? 'shadow-xl' : 'shadow-sm'} flex flex-col h-[460px] hover:border-emerald-200 transition-all`}>
                       <div className={`flex items-start justify-between mb-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
                          <div className={`flex-1 ${isRtl ? 'text-right' : ''}`}>
                             <div className={`flex items-center gap-2 mb-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                               <div className={`p-1.5 ${isDegrading ? 'bg-rose-100 text-rose-600' : 'bg-emerald-50 text-emerald-600'} rounded-lg`}>
+                               <div className={`p-1.5 ${isCritical ? (isSharpDecline ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600') : 'bg-emerald-50 text-emerald-600'} rounded-lg`}>
                                   <Target className="w-4 h-4" />
                                </div>
                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'سؤال التقييم' : 'Assessment Metric'}</span>
@@ -168,15 +181,27 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
                          </div>
                       </div>
 
-                      {/* Degradation Alert Badge */}
-                      {isDegrading && (
-                        <div className={`mb-4 flex items-center gap-2 px-3 py-2 bg-rose-600 text-white rounded-2xl animate-pulse shadow-lg shadow-rose-200 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                          <TrendingDown className="w-4 h-4" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">
-                            {isRtl ? 'تنبيه: تراجع متسلسل (آخر 3 استبيانات)' : 'Alert: Sequential Degradation (Last 3 Surveys)'}
-                          </span>
-                        </div>
-                      )}
+                      <div className="space-y-2 mb-4">
+                        {/* Sharp Decline Alert Badge */}
+                        {isSharpDecline && (
+                          <div className={`flex items-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-200 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                            <AlertTriangle className="w-4 h-4" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">
+                              {isRtl ? 'تنبيه: انخفاض حاد (≥ 2 نقطة)' : 'Alert: Sharp Decline (≥ 2 points)'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Sequential Degradation Alert Badge */}
+                        {isDegrading && (
+                          <div className={`flex items-center gap-2 px-3 py-2 bg-rose-600 text-white rounded-2xl shadow-lg shadow-rose-200 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                            <TrendingDown className="w-4 h-4" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">
+                              {isRtl ? 'تنبيه: تراجع متسلسل (آخر 3 استبيانات)' : 'Alert: Sequential Degradation (Last 3 Surveys)'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
                       <div className="flex-1 min-h-0">
                         <ResponsiveContainer width="100%" height="100%">
