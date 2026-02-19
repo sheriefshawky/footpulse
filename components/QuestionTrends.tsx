@@ -10,7 +10,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { User as UserIcon, FileText, Target, Activity, Star, LayoutList, AlertCircle, Layers } from 'lucide-react';
+import { User as UserIcon, FileText, Target, Activity, Star, LayoutList, AlertCircle, Layers, TrendingDown } from 'lucide-react';
 import { translations } from '../translations';
 
 interface QuestionTrendsProps {
@@ -59,12 +59,21 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
     return (sum / filteredResponses.length).toFixed(1);
   };
 
+  // Logic to detect sequential degradation in last 3 evaluations
+  const checkDegradation = (qId: string) => {
+    const data = getQuestionChartData(qId);
+    if (data.length < 3) return false;
+    const last3 = data.slice(-3);
+    // Strictly decreasing: 3rd last > 2nd last > 1st last
+    return last3[2].score < last3[1].score && last3[1].score < last3[0].score;
+  };
+
   return (
     <div className={`space-y-8 animate-in fade-in duration-500 pb-20 ${isRtl ? 'text-right font-arabic' : ''}`}>
       <header>
         <h2 className="text-3xl font-black text-slate-900 tracking-tight">{isRtl ? 'نبض الأسئلة الفردية' : 'Individual Question Pulse'}</h2>
         <p className="text-slate-500 font-medium">
-          {isRtl ? 'تحليل تفصيلي لكل مقياس مصنف حسب فئات التقييم.' : 'Detailed trend analysis for every specific metric categorized by evaluation domains.'}
+          {isRtl ? 'تحليل تفصيلي لكل مقياس مصنف حسب فئات التقييم مع تنبيهات التراجع.' : 'Detailed trend analysis categorized by evaluation domains with automated degradation alerts.'}
         </p>
       </header>
 
@@ -134,89 +143,105 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {cat.questions.map((q, qIdx) => (
-                  <div key={q.id} className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm flex flex-col h-[400px] hover:border-emerald-200 transition-colors">
-                    <div className={`flex items-start justify-between mb-6 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                       <div className={`flex-1 ${isRtl ? 'text-right' : ''}`}>
-                          <div className={`flex items-center gap-2 mb-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                             <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
-                                <Target className="w-4 h-4" />
-                             </div>
-                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'سؤال التقييم' : 'Assessment Metric'}</span>
-                          </div>
-                          <h3 className="text-lg font-black text-slate-900 leading-tight">{isRtl ? q.arText : q.text}</h3>
-                       </div>
-                       <div className={`flex flex-col items-end gap-1 ${isRtl ? 'items-start' : 'items-end'}`}>
-                          <div className="px-3 py-1 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter">
-                             {isRtl ? 'المتوسط: ' : 'Avg: '}{getQuestionAvg(q.id)}
-                          </div>
-                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{isRtl ? 'درجة 1-5' : 'Score 1-5'}</span>
-                       </div>
-                    </div>
+                {cat.questions.map((q, qIdx) => {
+                  const isDegrading = checkDegradation(q.id);
+                  const accentColor = isDegrading ? '#f43f5e' : (catIdx % 2 === 0 ? '#10b981' : '#3b82f6');
+                  const bgColor = isDegrading ? 'bg-rose-50' : 'bg-white';
 
-                    <div className="flex-1 min-h-0">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={getQuestionChartData(q.id)}>
-                          <defs>
-                            <linearGradient id={`color-${q.id}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={catIdx % 2 === 0 ? '#10b981' : '#3b82f6'} stopOpacity={0.2}/>
-                              <stop offset="95%" stopColor={catIdx % 2 === 0 ? '#10b981' : '#3b82f6'} stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis 
-                            dataKey="month" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
-                            dy={10} 
-                            reversed={isRtl} 
-                          />
-                          <YAxis 
-                            domain={[0, 5]}
-                            ticks={[1, 2, 3, 4, 5]}
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
-                            dx={isRtl ? 10 : -10} 
-                            orientation={isRtl ? 'right' : 'left'}
-                          />
-                          <Tooltip 
-                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                            labelStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: catIdx % 2 === 0 ? '#10b981' : '#3b82f6', marginBottom: '4px' }}
-                          />
-                          <Area 
-                            type="monotone" 
-                            dataKey="score" 
-                            stroke={catIdx % 2 === 0 ? '#10b981' : '#3b82f6'} 
-                            strokeWidth={3} 
-                            fillOpacity={1} 
-                            fill={`url(#color-${q.id})`}
-                            dot={{ r: 4, fill: catIdx % 2 === 0 ? '#10b981' : '#3b82f6', strokeWidth: 2, stroke: '#fff' }} 
-                            activeDot={{ r: 6, strokeWidth: 0 }}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
+                  return (
+                    <div key={q.id} className={`${bgColor} p-6 md:p-8 rounded-[40px] border ${isDegrading ? 'border-rose-200 shadow-rose-100 shadow-xl' : 'border-slate-200 shadow-sm'} flex flex-col h-[420px] hover:border-emerald-200 transition-all`}>
+                      <div className={`flex items-start justify-between mb-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                         <div className={`flex-1 ${isRtl ? 'text-right' : ''}`}>
+                            <div className={`flex items-center gap-2 mb-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                               <div className={`p-1.5 ${isDegrading ? 'bg-rose-100 text-rose-600' : 'bg-emerald-50 text-emerald-600'} rounded-lg`}>
+                                  <Target className="w-4 h-4" />
+                               </div>
+                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'سؤال التقييم' : 'Assessment Metric'}</span>
+                            </div>
+                            <h3 className="text-lg font-black text-slate-900 leading-tight">{isRtl ? q.arText : q.text}</h3>
+                         </div>
+                         <div className={`flex flex-col items-end gap-1 ${isRtl ? 'items-start' : 'items-end'}`}>
+                            <div className="px-3 py-1 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter">
+                               {isRtl ? 'المتوسط: ' : 'Avg: '}{getQuestionAvg(q.id)}
+                            </div>
+                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{isRtl ? 'درجة 1-5' : 'Score 1-5'}</span>
+                         </div>
+                      </div>
 
-                    <div className={`mt-6 pt-4 border-t border-slate-50 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
-                       <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                          <Activity className="w-3 h-3 text-slate-300" />
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                             {isRtl ? 'الاتجاه عبر الزمن' : 'Trend Over Time'}
+                      {/* Degradation Alert Badge */}
+                      {isDegrading && (
+                        <div className={`mb-4 flex items-center gap-2 px-3 py-2 bg-rose-600 text-white rounded-2xl animate-pulse shadow-lg shadow-rose-200 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                          <TrendingDown className="w-4 h-4" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">
+                            {isRtl ? 'تنبيه: تراجع متسلسل (آخر 3 استبيانات)' : 'Alert: Sequential Degradation (Last 3 Surveys)'}
                           </span>
-                       </div>
-                       <div className="flex items-center gap-1">
-                          {[1, 2, 3, 4, 5].map(star => (
-                             <Star 
-                               key={star} 
-                               className={`w-2.5 h-2.5 ${star <= Math.round(Number(getQuestionAvg(q.id))) ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} 
-                             />
-                          ))}
-                       </div>
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-h-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={getQuestionChartData(q.id)}>
+                            <defs>
+                              <linearGradient id={`color-${q.id}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={accentColor} stopOpacity={0.2}/>
+                                <stop offset="95%" stopColor={accentColor} stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis 
+                              dataKey="month" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
+                              dy={10} 
+                              reversed={isRtl} 
+                            />
+                            <YAxis 
+                              domain={[0, 5]}
+                              ticks={[1, 2, 3, 4, 5]}
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
+                              dx={isRtl ? 10 : -10} 
+                              orientation={isRtl ? 'right' : 'left'}
+                            />
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                              labelStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: accentColor, marginBottom: '4px' }}
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="score" 
+                              stroke={accentColor} 
+                              strokeWidth={3} 
+                              fillOpacity={1} 
+                              fill={`url(#color-${q.id})`}
+                              dot={{ r: 4, fill: accentColor, strokeWidth: 2, stroke: '#fff' }} 
+                              activeDot={{ r: 6, strokeWidth: 0 }}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className={`mt-6 pt-4 border-t border-slate-50 flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
+                         <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                            <Activity className="w-3 h-3 text-slate-300" />
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                               {isRtl ? 'الاتجاه عبر الزمن' : 'Trend Over Time'}
+                            </span>
+                         </div>
+                         <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map(star => (
+                               <Star 
+                                 key={star} 
+                                 className={`w-2.5 h-2.5 ${star <= Math.round(Number(getQuestionAvg(q.id))) ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} 
+                               />
+                            ))}
+                         </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ))}
