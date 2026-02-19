@@ -16,7 +16,7 @@ import {
   Line,
   Legend
 } from 'recharts';
-import { Filter, TrendingUp, Target, Zap, Shield, ChevronDown, Layout, Users, Check, Calendar, Activity, ArrowUpRight, ArrowDownRight, Minus, BarChart3, FileText } from 'lucide-react';
+import { Filter, TrendingUp, Target, Zap, Shield, ChevronDown, Layout, Users, Check, Calendar, Activity, ArrowUpRight, ArrowDownRight, Minus, BarChart3, FileText, AlertTriangle, AlertCircle } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -283,12 +283,27 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       });
     });
 
-    return Array.from(allUniqueCats).map(catName => ({
-      subject: isRtl ? (individualCategories[catName]?.arName || catName) : catName,
-      A: individualCategories[catName] ? Math.round(individualCategories[catName].sum / individualCategories[catName].count) : 0,
-      B: squadCategories[catName] ? Math.round(squadCategories[catName].sum / squadCategories[catName].count) : 0,
-    })).filter(d => d.A > 0 || d.B > 0);
+    return Array.from(allUniqueCats).map(catName => {
+      const playerAvg = individualCategories[catName] ? Math.round(individualCategories[catName].sum / individualCategories[catName].count) : 0;
+      const academyAvg = squadCategories[catName] ? Math.round(squadCategories[catName].sum / squadCategories[catName].count) : 0;
+      
+      let flag: 'red' | 'yellow' | 'none' = 'none';
+      if (academyAvg > 0) {
+        const dropRatio = (academyAvg - playerAvg) / academyAvg;
+        if (dropRatio >= 0.25) flag = 'red';
+        else if (dropRatio >= 0.15) flag = 'yellow';
+      }
+
+      return {
+        subject: isRtl ? (individualCategories[catName]?.arName || catName) : catName,
+        A: playerAvg,
+        B: academyAvg,
+        flag
+      };
+    }).filter(d => d.A > 0 || d.B > 0);
   }, [responses, templates, selectedPlayerIds, selectedMonths, selectedTemplateIds, isRtl, users]);
+
+  const competencyAlerts = useMemo(() => radarData.filter(d => d.flag !== 'none'), [radarData]);
 
   return (
     <div className={`animate-in fade-in duration-500 space-y-8 pb-20 ${isRtl ? 'text-right font-arabic' : ''}`}>
@@ -404,11 +419,32 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
              </div>
 
              <div className="lg:col-span-8">
-                <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm h-full flex flex-col min-h-[500px]">
-                   <div className={`flex items-center justify-between mb-8 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm h-full flex flex-col min-h-[550px]">
+                   <div className={`flex items-center justify-between mb-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
                       <h3 className="text-xl font-black text-slate-900 tracking-tight">{t.competencyProfile}</h3>
                       <Target className="w-5 h-5 text-slate-300" />
                    </div>
+
+                   {/* Competency Alerts Section */}
+                   <div className={`mb-6 flex flex-wrap gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                     {competencyAlerts.length > 0 ? competencyAlerts.map((alert, idx) => (
+                       <div 
+                         key={idx} 
+                         className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl text-[9px] font-black uppercase tracking-tight animate-in fade-in zoom-in duration-300 ${
+                           alert.flag === 'red' ? 'bg-rose-100 text-rose-600 shadow-sm shadow-rose-100' : 'bg-amber-100 text-amber-600 shadow-sm shadow-amber-100'
+                         } ${isRtl ? 'flex-row-reverse' : ''}`}
+                       >
+                         {alert.flag === 'red' ? <AlertCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                         {alert.subject} {isRtl ? (alert.flag === 'red' ? 'تنبيه: انخفاض حاد' : 'تحذير: تراجع') : (alert.flag === 'red' ? 'Critical' : 'Underperforming')}
+                       </div>
+                     )) : (
+                       <div className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-2xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                         <Check className="w-3 h-3" />
+                         {isRtl ? 'كفاءة مستقرة' : 'Stable Competency'}
+                       </div>
+                     )}
+                   </div>
+
                    <div className="flex-1">
                      <ResponsiveContainer width="100%" height="100%">
                        <RadarChart data={radarData}>
