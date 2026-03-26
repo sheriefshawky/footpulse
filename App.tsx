@@ -61,7 +61,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [activeSurvey, setActiveSurvey] = useState<{template: SurveyTemplate, targetId: string, month: string} | null>(null);
+  const [activeSurvey, setActiveSurvey] = useState<{template: SurveyTemplate, targetId: string, month: string, year: number, week: number} | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -130,6 +130,8 @@ const App: React.FC = () => {
         template_id: response.templateId,
         target_player_id: response.targetPlayerId,
         month: response.month,
+        year: response.year,
+        week: response.week,
         answers: response.answers,
         weighted_score: response.weightedScore
       });
@@ -306,6 +308,8 @@ const App: React.FC = () => {
               template={activeSurvey.template} 
               targetId={activeSurvey.targetId} 
               month={activeSurvey.month}
+              year={activeSurvey.year}
+              week={activeSurvey.week}
               currentUser={currentUser}
               users={users}
               responses={responses}
@@ -322,7 +326,7 @@ const App: React.FC = () => {
                   users={users} 
                   templates={templates}
                   assignments={assignments}
-                  onStartSurvey={(t, id, m) => setActiveSurvey({template: t, targetId: id, month: m})}
+                  onStartSurvey={(t, id, m, y, w) => setActiveSurvey({template: t, targetId: id, month: m, year: y, week: w})}
                   lang={lang}
                 />
               )}
@@ -335,7 +339,7 @@ const App: React.FC = () => {
                   templates={templates} 
                   responses={responses}
                   assignments={assignments}
-                  onStartSurvey={(t, id, m) => setActiveSurvey({template: t, targetId: id, month: m})}
+                  onStartSurvey={(t, id, m, y, w) => setActiveSurvey({template: t, targetId: id, month: m, year: y, week: w})}
                   lang={lang}
                 />
               )}

@@ -92,10 +92,14 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
 
   // Available Filter Options
   const months: string[] = useMemo(() => Array.from(new Set(responses.map(r => r.month))).sort(), [responses]);
+  const years: number[] = useMemo(() => Array.from(new Set(responses.map(r => r.year))).sort((a, b) => b - a), [responses]);
+  const weeks: number[] = useMemo(() => Array.from(new Set(responses.map(r => r.week))).sort((a, b) => a - b), [responses]);
   
   // Filter States
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
+  const [selectedYears, setSelectedYears] = useState<Set<number>>(new Set());
+  const [selectedWeeks, setSelectedWeeks] = useState<Set<number>>(new Set());
   const [selectedSurveys, setSelectedSurveys] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
@@ -126,31 +130,35 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
   }, [templates, selectedSurveys, selectedCategories, isRtl]);
 
   // Generic toggle helper
-  const toggleItem = (set: Set<string>, setter: (s: Set<string>) => void, id: string) => {
+  const toggleItem = <T,>(set: Set<T>, setter: (s: Set<T>) => void, id: T) => {
     const next = new Set(set);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setter(next);
   };
 
-  const selectAllHelper = (items: {id: string}[], setter: (s: Set<string>) => void) => setter(new Set(items.map(i => i.id)));
-  const deselectAllHelper = (setter: (s: Set<string>) => void) => setter(new Set());
+  const selectAllHelper = (items: {id: string | number}[], setter: (s: Set<any>) => void) => setter(new Set(items.map(i => i.id)));
+  const deselectAllHelper = (setter: (s: Set<any>) => void) => setter(new Set());
 
   // Filter Data
   const filteredData = useMemo(() => {
     return responses.filter(r => {
       const userMatch = selectedUsers.size === 0 || selectedUsers.has(r.targetPlayerId);
       const monthMatch = selectedMonths.size === 0 || selectedMonths.has(r.month);
+      const yearMatch = selectedYears.size === 0 || selectedYears.has(r.year);
+      const weekMatch = selectedWeeks.size === 0 || selectedWeeks.has(r.week);
       const surveyMatch = selectedSurveys.size === 0 || selectedSurveys.has(r.templateId);
-      return userMatch && monthMatch && surveyMatch;
+      return userMatch && monthMatch && yearMatch && weekMatch && surveyMatch;
     });
-  }, [responses, selectedUsers, selectedMonths, selectedSurveys]);
+  }, [responses, selectedUsers, selectedMonths, selectedYears, selectedWeeks, selectedSurveys]);
 
-  // Chart Data Preparation: Trend by Month
-  const trendByMonthData = useMemo(() => {
-    const data: Record<string, { month: string, sum: number, count: number }> = {};
+  // Chart Data Preparation: Trend by Period (Year-Month-Week)
+  const trendData = useMemo(() => {
+    const data: Record<string, { period: string, sum: number, count: number, sortKey: string }> = {};
     filteredData.forEach(r => {
-      if (!data[r.month]) data[r.month] = { month: r.month, sum: 0, count: 0 };
+      const period = `${r.year}-${r.month} W${r.week}`;
+      const sortKey = `${r.year}-${r.month}-${r.week.toString().padStart(2, '0')}`;
+      if (!data[sortKey]) data[sortKey] = { period, sum: 0, count: 0, sortKey };
       
       let totalValue = 0;
       let qCount = 0;
@@ -172,18 +180,19 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
       }
 
       if (qCount > 0) {
-        data[r.month].sum += (totalValue / (qCount * 10)) * 100;
-        data[r.month].count += 1;
+        data[sortKey].sum += (totalValue / (qCount * 10)) * 100;
+        data[sortKey].count += 1;
       } else {
-        data[r.month].sum += r.weightedScore;
-        data[r.month].count += 1;
+        data[sortKey].sum += r.weightedScore;
+        data[sortKey].count += 1;
       }
     });
 
     return Object.values(data).map(d => ({
-      month: d.month,
-      score: Math.round(d.sum / d.count)
-    })).sort((a, b) => a.month.localeCompare(b.month));
+      period: d.period,
+      score: Math.round(d.sum / d.count),
+      sortKey: d.sortKey
+    })).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   }, [filteredData, templates, selectedCategories, selectedQuestions]);
 
   // User comparison chart data
@@ -211,7 +220,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
       </header>
 
       {/* Filters Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         <MultiSelect 
           label={isRtl ? 'المستخدمين' : 'Users'} 
           icon={<Users className="w-4 h-4 text-blue-500" />}
@@ -223,6 +232,16 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
           isRtl={isRtl}
         />
         <MultiSelect 
+          label={isRtl ? 'السنة' : 'Year'} 
+          icon={<Calendar className="w-4 h-4 text-indigo-500" />}
+          options={years.map(y => ({ id: y.toString(), name: y.toString() }))}
+          selected={new Set(Array.from(selectedYears).map(y => y.toString()))}
+          toggle={(id) => toggleItem(selectedYears, setSelectedYears, parseInt(id))}
+          selectAll={() => selectAllHelper(years.map(y => ({ id: y })), setSelectedYears)}
+          deselectAll={() => deselectAllHelper(setSelectedYears)}
+          isRtl={isRtl}
+        />
+        <MultiSelect 
           label={isRtl ? 'الأشهر' : 'Months'} 
           icon={<Calendar className="w-4 h-4 text-emerald-500" />}
           options={months.map((m: string) => ({ id: m, name: m }))}
@@ -230,6 +249,16 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
           toggle={(id) => toggleItem(selectedMonths, setSelectedMonths, id)}
           selectAll={() => selectAllHelper(months.map((m: string) => ({ id: m })), setSelectedMonths)}
           deselectAll={() => deselectAllHelper(setSelectedMonths)}
+          isRtl={isRtl}
+        />
+        <MultiSelect 
+          label={isRtl ? 'الأسبوع' : 'Week'} 
+          icon={<Calendar className="w-4 h-4 text-teal-500" />}
+          options={weeks.map(w => ({ id: w.toString(), name: `W${w}` }))}
+          selected={new Set(Array.from(selectedWeeks).map(w => w.toString()))}
+          toggle={(id) => toggleItem(selectedWeeks, setSelectedWeeks, parseInt(id))}
+          selectAll={() => selectAllHelper(weeks.map(w => ({ id: w })), setSelectedWeeks)}
+          deselectAll={() => deselectAllHelper(setSelectedWeeks)}
           isRtl={isRtl}
         />
         <MultiSelect 
@@ -289,7 +318,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
           </div>
           <div className="flex-1 min-h-0">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendByMonthData}>
+              <AreaChart data={trendData}>
                 <defs>
                   <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -297,10 +326,10 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} dy={10} reversed={isRtl} />
+                <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} dy={10} reversed={isRtl} />
                 <YAxis orientation={isRtl ? 'right' : 'left'} domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} dx={isRtl ? 10 : -10} />
                 <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorTrend)" dot={{ r: 6, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} />
+                <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorTrend)" dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -341,7 +370,9 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'المستخدم' : 'User'}</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'السنة' : 'Year'}</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'الشهر' : 'Month'}</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'الأسبوع' : 'Week'}</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'الاستبيان' : 'Survey'}</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{isRtl ? 'النتيجة' : 'Score'}</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'التاريخ' : 'Date'}</th>
@@ -352,14 +383,16 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
                 const user = users.find(u => u.id === r.targetPlayerId);
                 const tpl = templates.find(t => t.id === r.templateId);
                 return (
-                  <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                   <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
                         <img src={user?.avatar} className="w-8 h-8 rounded-full object-cover" alt="" />
                         <span className="text-xs font-bold text-slate-900">{user?.name}</span>
                       </div>
                     </td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-600">{r.year}</td>
                     <td className="px-6 py-4 text-xs font-bold text-slate-600">{r.month}</td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-600">W{r.week}</td>
                     <td className="px-6 py-4 text-xs font-bold text-slate-600">{isRtl ? tpl?.arName : tpl?.name}</td>
                     <td className="px-6 py-4 text-center">
                        <span className={`px-2 py-1 rounded-lg text-xs font-black ${r.weightedScore >= 80 ? 'bg-emerald-50 text-emerald-600' : r.weightedScore >= 60 ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>

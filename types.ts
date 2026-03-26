@@ -66,6 +66,8 @@ export interface SurveyAssignment {
   respondentId: string;
   targetId: string;
   month: string;
+  year: number;
+  week: number;
   status: 'PENDING' | 'COMPLETED';
 }
 
@@ -75,6 +77,8 @@ export interface SurveyResponse {
   userId: string;
   targetPlayerId: string;
   month: string;
+  year: number;
+  week: number;
   date: string;
   answers: Record<string, number>;
   weightedScore: number;

@@ -106,9 +106,21 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     return months.map(m => ({ id: m, name: m }));
   }, [responses]);
 
+  const availableYears = useMemo(() => {
+    const years = Array.from(new Set(responses.map(r => r.year))).sort((a, b) => b - a);
+    return years.map(y => ({ id: y.toString(), name: y.toString() }));
+  }, [responses]);
+
+  const availableWeeks = useMemo(() => {
+    const weeks = Array.from(new Set(responses.map(r => r.week))).sort((a, b) => a - b);
+    return weeks.map(w => ({ id: w.toString(), name: `W${w}` }));
+  }, [responses]);
+
   const [selectedTrainerIds, setSelectedTrainerIds] = useState<Set<string>>(new Set());
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set(availableMonths.map(m => m.id)));
+  const [selectedYears, setSelectedYears] = useState<Set<string>>(new Set(availableYears.map(y => y.id)));
+  const [selectedWeeks, setSelectedWeeks] = useState<Set<string>>(new Set(availableWeeks.map(w => w.id)));
 
   const availablePlayers = useMemo(() => {
     let players = users.filter(u => u.role === UserRole.PLAYER);
@@ -154,6 +166,18 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     setSelectedMonths(next);
   };
 
+  const toggleYear = (id: string) => {
+    const next = new Set(selectedYears);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedYears(next);
+  };
+
+  const toggleWeek = (id: string) => {
+    const next = new Set(selectedWeeks);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedWeeks(next);
+  };
+
   const playerResponses = useMemo(() => 
     responses.filter(r => {
       const targetPlayer = users.find(u => u.id === r.targetPlayerId);
@@ -161,6 +185,8 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       const trainerMatch = selectedTrainerIds.size === 0 || (targetPlayer.trainerId && selectedTrainerIds.has(targetPlayer.trainerId));
       const playerMatch = selectedPlayerIds.size === 0 || selectedPlayerIds.has(r.targetPlayerId);
       const monthMatch = selectedMonths.size === 0 || selectedMonths.has(r.month);
+      const yearMatch = selectedYears.size === 0 || selectedYears.has(r.year.toString());
+      const weekMatch = selectedWeeks.size === 0 || selectedWeeks.has(r.week.toString());
       const templateMatch = selectedTemplateIds.size === 0 || selectedTemplateIds.has(r.templateId);
       
       let roleMatch = false;
@@ -170,9 +196,9 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       else if (user.role === UserRole.PLAYER) roleMatch = targetPlayer.id === user.id;
       else if (user.role === UserRole.DOCTOR) roleMatch = user.playerIds && user.playerIds.includes(targetPlayer.id);
 
-      return trainerMatch && playerMatch && monthMatch && templateMatch && roleMatch;
+      return trainerMatch && playerMatch && monthMatch && yearMatch && weekMatch && templateMatch && roleMatch;
     }),
-    [responses, selectedPlayerIds, selectedMonths, selectedTrainerIds, selectedTemplateIds, user, users]
+    [responses, selectedPlayerIds, selectedMonths, selectedYears, selectedWeeks, selectedTrainerIds, selectedTemplateIds, user, users]
   );
 
   const selectionAvg = useMemo(() => {
@@ -181,35 +207,61 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
   }, [playerResponses]);
 
   const multiTrendData = useMemo(() => {
-    const months = Array.from(selectedMonths).sort();
+    const periodMap = new Map<string, string>();
+    playerResponses.forEach(r => {
+      const period = `${r.year}-${r.month} W${r.week}`;
+      const sortKey = `${r.year}-${r.month}-${r.week.toString().padStart(2, '0')}`;
+      periodMap.set(period, sortKey);
+    });
+    
+    const periods = Array.from(periodMap.entries())
+      .map(([period, sortKey]) => ({ period, sortKey }))
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+    
     const playersInView = Array.from(selectedPlayerIds);
     
-    return months.map(month => {
-      const row: any = { month };
+    return periods.map(({ period, sortKey }) => {
+      const row: any = { period };
       playersInView.forEach(pId => {
         const player = users.find(u => u.id === pId);
         if (!player) return;
         
-        const monthEvals = playerResponses.filter(r => r.targetPlayerId === pId && r.month === month);
-        if (monthEvals.length > 0) {
-          row[player.name] = Math.round(monthEvals.reduce((acc, r) => acc + r.weightedScore, 0) / monthEvals.length);
+        const periodEvals = playerResponses.filter(r => 
+          r.targetPlayerId === pId && 
+          `${r.year}-${r.month} W${r.week}` === period
+        );
+        if (periodEvals.length > 0) {
+          row[player.name] = Math.round(periodEvals.reduce((acc, r) => acc + r.weightedScore, 0) / periodEvals.length);
         }
       });
       return row;
     }).filter(row => Object.keys(row).length > 1); 
-  }, [playerResponses, selectedPlayerIds, selectedMonths, users]);
+  }, [playerResponses, selectedPlayerIds, users]);
 
   const categoryTrendDelta = useMemo(() => {
     const categories: Record<string, { current: number, previous: number, arName: string, countC: number, countP: number }> = {};
-    const months = Array.from(selectedMonths).sort();
-    if (months.length < 2) return [];
+    
+    const periodMap = new Map<string, string>();
+    playerResponses.forEach(r => {
+      const period = `${r.year}-${r.month} W${r.week}`;
+      const sortKey = `${r.year}-${r.month}-${r.week.toString().padStart(2, '0')}`;
+      periodMap.set(period, sortKey);
+    });
 
-    const currentMonth = months[months.length - 1];
-    const prevMonth = months[months.length - 2];
+    const periods = Array.from(periodMap.entries())
+      .map(([period, sortKey]) => ({ period, sortKey }))
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+    if (periods.length < 2) return [];
+
+    const currentPeriod = periods[periods.length - 1].period;
+    const prevPeriod = periods[periods.length - 2].period;
 
     playerResponses.forEach(res => {
       const template = templates.find(t => t.id === res.templateId);
       if (!template) return;
+
+      const resPeriod = `${res.year}-${res.month} W${res.week}`;
 
       template.categories.forEach(cat => {
         const catKey = cat.name;
@@ -225,10 +277,10 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
 
         if (count > 0) {
           const avg = score / count;
-          if (res.month === currentMonth) {
+          if (resPeriod === currentPeriod) {
             categories[catKey].current += avg;
             categories[catKey].countC++;
-          } else if (res.month === prevMonth) {
+          } else if (resPeriod === prevPeriod) {
             categories[catKey].previous += avg;
             categories[catKey].countP++;
           }
@@ -252,10 +304,12 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
     const squadCategories: Record<string, { sum: number, count: number }> = {};
     const allUniqueCats = new Set<string>();
 
-    responses.forEach(res => {
-      // Baseline filtering
-      if (selectedMonths.size > 0 && !selectedMonths.has(res.month)) return;
-      if (selectedTemplateIds.size > 0 && !selectedTemplateIds.has(res.templateId)) return;
+      responses.forEach(res => {
+        // Baseline filtering
+        if (selectedMonths.size > 0 && !selectedMonths.has(res.month)) return;
+        if (selectedYears.size > 0 && !selectedYears.has(res.year.toString())) return;
+        if (selectedWeeks.size > 0 && !selectedWeeks.has(res.week.toString())) return;
+        if (selectedTemplateIds.size > 0 && !selectedTemplateIds.has(res.templateId)) return;
       
       const template = templates.find(tpl => tpl.id === res.templateId);
       if (!template) return;
@@ -304,7 +358,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
         flag
       };
     }).filter(d => d.A > 0 || d.B > 0);
-  }, [responses, templates, selectedPlayerIds, selectedMonths, selectedTemplateIds, isRtl, users]);
+  }, [responses, templates, selectedPlayerIds, selectedMonths, selectedYears, selectedWeeks, selectedTemplateIds, isRtl, users]);
 
   const competencyAlerts = useMemo(() => radarData.filter(d => d.flag !== 'none'), [radarData]);
 
@@ -349,6 +403,16 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
             isRtl={isRtl} 
           />
           <MultiSelect 
+            label={isRtl ? 'السنة' : 'Year'} 
+            icon={<Calendar className="w-4 h-4 text-slate-400" />} 
+            options={availableYears} 
+            selected={selectedYears} 
+            toggle={toggleYear} 
+            selectAll={() => setSelectedYears(new Set(availableYears.map(y => y.id)))} 
+            deselectAll={() => setSelectedYears(new Set())} 
+            isRtl={isRtl} 
+          />
+          <MultiSelect 
             label={isRtl ? 'الشهور' : 'Months'} 
             icon={<Calendar className="w-4 h-4 text-slate-400" />} 
             options={availableMonths} 
@@ -356,6 +420,16 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
             toggle={toggleMonth} 
             selectAll={() => setSelectedMonths(new Set(availableMonths.map(m => m.id)))} 
             deselectAll={() => setSelectedMonths(new Set())} 
+            isRtl={isRtl} 
+          />
+          <MultiSelect 
+            label={isRtl ? 'الأسبوع' : 'Week'} 
+            icon={<Calendar className="w-4 h-4 text-slate-400" />} 
+            options={availableWeeks} 
+            selected={selectedWeeks} 
+            toggle={toggleWeek} 
+            selectAll={() => setSelectedWeeks(new Set(availableWeeks.map(w => w.id)))} 
+            deselectAll={() => setSelectedWeeks(new Set())} 
             isRtl={isRtl} 
           />
         </div>
@@ -381,7 +455,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
              <div className="flex gap-4 z-10">
                 <div className="px-6 py-4 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md">
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'الفترة' : 'Period'}</p>
-                   <p className="text-sm font-black text-white">{selectedMonths.size} {isRtl ? 'شهور' : 'Months'}</p>
+                   <p className="text-sm font-black text-white">{selectedWeeks.size} {isRtl ? 'أسابيع' : 'Weeks'}</p>
                 </div>
                 <div className="px-6 py-4 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md">
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{isRtl ? 'اللاعبون' : 'Players'}</p>
@@ -414,7 +488,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
                       {categoryTrendDelta.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400">
                            <Calendar className="w-8 h-8 mb-2 opacity-20" />
-                           <p className="text-[10px] font-bold italic">Need 2+ months for trends</p>
+                           <p className="text-[10px] font-bold italic">Need 2+ weeks for trends</p>
                         </div>
                       )}
                    </div>
@@ -481,7 +555,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
                 <ResponsiveContainer width="100%" height="100%">
                    <LineChart data={multiTrendData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 700}} dy={12} reversed={isRtl} />
+                      <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 700}} dy={12} reversed={isRtl} />
                       <YAxis orientation={isRtl ? 'right' : 'left'} domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 700}} dx={isRtl ? 10 : -10} />
                       <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)', padding: '20px' }} />
                       <Legend wrapperStyle={{ paddingTop: 40 }} iconType="circle" />

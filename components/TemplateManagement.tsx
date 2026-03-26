@@ -29,7 +29,9 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // Assignment State
-  const [assignMonth, setAssignMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [assignMonth, setAssignMonth] = useState(new Date().toISOString().slice(5, 7));
+  const [assignYear, setAssignYear] = useState(new Date().getFullYear());
+  const [assignWeek, setAssignWeek] = useState(1);
   const [selectedRespondents, setSelectedRespondents] = useState<Set<string>>(new Set());
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
   const [assignmentMode, setAssignmentMode] = useState<'BULK' | 'MANUAL'>('BULK');
@@ -80,6 +82,8 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
       const payload: any = {
         template_id: assigningTemplate.id,
         month: assignMonth,
+        year: assignYear,
+        week: assignWeek,
       };
       if (assignmentMode === 'BULK') {
         payload.bulk_type = selectedBulkType;
@@ -105,6 +109,8 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
       const payload: any = {
         template_id: assigningTemplate.id,
         month: assignMonth,
+        year: assignYear,
+        week: assignWeek,
       };
       if (assignmentMode === 'BULK') {
         payload.bulk_type = selectedBulkType;
@@ -352,14 +358,43 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
 
              <div className="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar space-y-8">
                 <section className={`flex flex-col md:flex-row gap-6 items-start md:items-center ${isRtl ? 'md:flex-row-reverse' : ''}`}>
-                   <div className="w-full md:w-auto">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">{isRtl ? 'شهر التقييم' : 'Assessment Month'}</label>
-                      <input 
-                         type="month" 
-                         value={assignMonth} 
-                         onChange={(e) => setAssignMonth(e.target.value)}
-                         className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full md:w-auto">
+                      <div>
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">{t.year}</label>
+                         <select 
+                            value={assignYear} 
+                            onChange={(e) => setAssignYear(Number(e.target.value))}
+                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500"
+                         >
+                            {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+                              <option key={y} value={y}>{y}</option>
+                            ))}
+                         </select>
+                      </div>
+                      <div>
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">{isRtl ? 'الشهر' : 'Month'}</label>
+                         <select 
+                            value={assignMonth} 
+                            onChange={(e) => setAssignMonth(e.target.value)}
+                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500"
+                         >
+                            {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                         </select>
+                      </div>
+                      <div>
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">{t.week}</label>
+                         <select 
+                            value={assignWeek} 
+                            onChange={(e) => setAssignWeek(Number(e.target.value))}
+                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500"
+                         >
+                            {[1,2,3,4,5].map(w => (
+                              <option key={w} value={w}>{isRtl ? `الأسبوع ${w}` : `Week ${w}`}</option>
+                            ))}
+                         </select>
+                      </div>
                    </div>
                    <div className="flex-1 flex gap-2 p-1 bg-slate-100 rounded-2xl w-full md:w-auto">
                       <button onClick={() => setAssignmentMode('BULK')} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${assignmentMode === 'BULK' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>

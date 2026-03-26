@@ -70,6 +70,8 @@ class SurveyAssignment(Base):
     respondent_id = Column(String, ForeignKey("users.id"))
     target_id = Column(String)
     month = Column(String)
+    year = Column(Integer, nullable=True)
+    week = Column(Integer, nullable=True)
     status = Column(String, default='PENDING')
 
 class SurveyResponse(Base):
@@ -79,6 +81,8 @@ class SurveyResponse(Base):
     user_id = Column(String, ForeignKey("users.id"))
     target_player_id = Column(String)
     month = Column(String)
+    year = Column(Integer, nullable=True)
+    week = Column(Integer, nullable=True)
     date = Column(DateTime, default=datetime.utcnow)
     answers = Column(JSON)
     weighted_score = Column(Float)
@@ -103,7 +107,27 @@ def init_db():
                 except Exception as e:
                     print(f"Migration error (player_ids): {e}")
 
-        # 2. Handle Postgres Enum update if necessary
+    # 2. SurveyAssignment migrations
+    if "survey_assignments" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("survey_assignments")]
+        with engine.connect() as conn:
+            if "year" not in columns:
+                conn.execute(text("ALTER TABLE survey_assignments ADD COLUMN year INTEGER"))
+            if "week" not in columns:
+                conn.execute(text("ALTER TABLE survey_assignments ADD COLUMN week INTEGER"))
+            conn.commit()
+
+    # 3. SurveyResponse migrations
+    if "survey_responses" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("survey_responses")]
+        with engine.connect() as conn:
+            if "year" not in columns:
+                conn.execute(text("ALTER TABLE survey_responses ADD COLUMN year INTEGER"))
+            if "week" not in columns:
+                conn.execute(text("ALTER TABLE survey_responses ADD COLUMN week INTEGER"))
+            conn.commit()
+
+    # 4. Handle Postgres Enum update if necessary
         if DATABASE_URL.startswith("postgresql"):
             try:
                 with engine.connect() as conn:
@@ -204,6 +228,8 @@ class AdminResetPassword(BaseModel):
 class AssignmentCreate(BaseModel):
     template_id: str
     month: str
+    year: int
+    week: int
     respondent_ids: Optional[List[str]] = None
     target_ids: Optional[List[str]] = None
     bulk_type: Optional[str] = None
@@ -212,6 +238,8 @@ class SurveySubmit(BaseModel):
     template_id: str
     target_player_id: str
     month: str
+    year: int
+    week: int
     answers: Dict[str, int]
     weighted_score: float
 
@@ -256,6 +284,8 @@ def map_assignment(a: SurveyAssignment):
         "respondentId": a.respondent_id,
         "targetId": a.target_id,
         "month": a.month,
+        "year": a.year,
+        "week": a.week,
         "status": a.status
     }
 
@@ -266,6 +296,8 @@ def map_response(r: SurveyResponse):
         "userId": r.user_id,
         "targetPlayerId": r.target_player_id,
         "month": r.month,
+        "year": r.year,
+        "week": r.week,
         "date": r.date.isoformat(),
         "answers": r.answers,
         "weightedScore": r.weighted_score
@@ -484,7 +516,7 @@ def preview_bulk_assignments(data: AssignmentCreate, current_user: User = Depend
             for t_id in data.target_ids:
                 r = user_map.get(r_id); t = user_map.get(t_id)
                 if r and t: pairs.append((r, t))
-    return [{"respondent": map_user(r), "target": map_user(t), "alreadyExists": db.query(SurveyAssignment).filter(SurveyAssignment.template_id == data.template_id, SurveyAssignment.respondent_id == r.id, SurveyAssignment.target_id == t.id, SurveyAssignment.month == data.month).first() is not None} for r, t in pairs if r and t]
+    return [{"respondent": map_user(r), "target": map_user(t), "alreadyExists": db.query(SurveyAssignment).filter(SurveyAssignment.template_id == data.template_id, SurveyAssignment.respondent_id == r.id, SurveyAssignment.target_id == t.id, SurveyAssignment.month == data.month, SurveyAssignment.year == data.year, SurveyAssignment.week == data.week).first() is not None} for r, t in pairs if r and t]
 
 @app.post("/assignments")
 def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -518,8 +550,8 @@ def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_
             for t in data.target_ids: pairs.append((r, t))
     new_count = 0
     for r_id, t_id in pairs:
-        if not db.query(SurveyAssignment).filter(SurveyAssignment.template_id == data.template_id, SurveyAssignment.respondent_id == r_id, SurveyAssignment.target_id == t_id, SurveyAssignment.month == data.month).first():
-            db.add(SurveyAssignment(id=f"a-{os.urandom(4).hex()}", template_id=data.template_id, assigner_id=current_user.id, respondent_id=r_id, target_id=t_id, month=data.month))
+        if not db.query(SurveyAssignment).filter(SurveyAssignment.template_id == data.template_id, SurveyAssignment.respondent_id == r_id, SurveyAssignment.target_id == t_id, SurveyAssignment.month == data.month, SurveyAssignment.year == data.year, SurveyAssignment.week == data.week).first():
+            db.add(SurveyAssignment(id=f"a-{os.urandom(4).hex()}", template_id=data.template_id, assigner_id=current_user.id, respondent_id=r_id, target_id=t_id, month=data.month, year=data.year, week=data.week))
             new_count += 1
     db.commit()
     return {"count": new_count}
@@ -572,13 +604,15 @@ def get_responses(current_user: User = Depends(get_current_user), db: Session = 
 
 @app.post("/responses")
 def submit_response(res: SurveySubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    assignment = db.query(SurveyAssignment).filter(SurveyAssignment.template_id == res.template_id, SurveyAssignment.respondent_id == current_user.id, SurveyAssignment.target_id == res.target_player_id, SurveyAssignment.month == res.month).first()
+    assignment = db.query(SurveyAssignment).filter(SurveyAssignment.template_id == res.template_id, SurveyAssignment.respondent_id == current_user.id, SurveyAssignment.target_id == res.target_player_id, SurveyAssignment.month == res.month, SurveyAssignment.year == res.year, SurveyAssignment.week == res.week).first()
     db_res = SurveyResponse(
         id=f"sr-{os.urandom(4).hex()}",
         template_id=res.template_id,
         user_id=current_user.id,
         target_player_id=res.target_player_id,
         month=res.month,
+        year=res.year,
+        week=res.week,
         answers=res.answers,
         weighted_score=res.weighted_score
     )
@@ -593,7 +627,7 @@ def delete_response(response_id: str, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=403, detail="Admin only")
     r = db.query(SurveyResponse).filter(SurveyResponse.id == response_id).first()
     if r:
-        assignment = db.query(SurveyAssignment).filter(SurveyAssignment.template_id == r.template_id, SurveyAssignment.respondent_id == r.user_id, SurveyAssignment.target_id == r.target_player_id, SurveyAssignment.month == r.month).first()
+        assignment = db.query(SurveyAssignment).filter(SurveyAssignment.template_id == r.template_id, SurveyAssignment.respondent_id == r.user_id, SurveyAssignment.target_id == r.target_player_id, SurveyAssignment.month == r.month, SurveyAssignment.year == r.year, SurveyAssignment.week == r.week).first()
         if assignment: assignment.status = 'PENDING'
         db.delete(r); db.commit()
     return {"message": "Deleted"}

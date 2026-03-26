@@ -8,6 +8,8 @@ interface Props {
   template: SurveyTemplate;
   targetId: string;
   month: string;
+  year: number;
+  week: number;
   currentUser: User;
   users: User[];
   responses: SurveyResponse[];
@@ -16,7 +18,7 @@ interface Props {
   lang: Language;
 }
 
-const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, users, responses, onSubmit, onCancel, lang }) => {
+const SurveyForm: React.FC<Props> = ({ template, targetId, month, year, week, currentUser, users, responses, onSubmit, onCancel, lang }) => {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
 
@@ -69,6 +71,8 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
         userId: currentUser.id,
         targetPlayerId: targetId,
         month: month,
+        year: year,
+        week: week,
         date: new Date().toISOString(),
         answers,
         weightedScore: calculateWeightedScore()
@@ -123,7 +127,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
             <div className={isRtl ? 'text-left' : 'text-right'}>
               <p className="text-[10px] font-black uppercase text-emerald-500 tracking-widest mb-1">{t.step} {currentCategoryIndex + 1} {t.of} {categories.length}</p>
               <h4 className="text-xs font-bold text-slate-400">{isRtl ? template.arName : template.name}</h4>
-              <p className="text-[10px] font-bold text-slate-500">{isRtl ? 'الشهر:' : 'Month:'} {month}</p>
+              <p className="text-[10px] font-bold text-slate-500">{isRtl ? 'الفترة:' : 'Period:'} {year}-{month} {isRtl ? `الأسبوع ${week}` : `W${week}`}</p>
             </div>
           </div>
 
