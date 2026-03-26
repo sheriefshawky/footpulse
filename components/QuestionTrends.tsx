@@ -74,7 +74,7 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
     if (data.length < 2) return false;
     const last = data[data.length - 1].score;
     const prev = data[data.length - 2].score;
-    return (prev - last) >= 2;
+    return (prev - last) >= 4;
   };
 
   return (
@@ -177,7 +177,7 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
                             <div className="px-3 py-1 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter">
                                {isRtl ? 'المتوسط: ' : 'Avg: '}{getQuestionAvg(q.id)}
                             </div>
-                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{isRtl ? 'درجة 1-5' : 'Score 1-5'}</span>
+                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{isRtl ? 'درجة 1-10' : 'Score 1-10'}</span>
                          </div>
                       </div>
 
@@ -187,7 +187,7 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
                           <div className={`flex items-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-200 ${isRtl ? 'flex-row-reverse' : ''}`}>
                             <AlertTriangle className="w-4 h-4" />
                             <span className="text-[10px] font-black uppercase tracking-widest">
-                              {isRtl ? 'تنبيه: انخفاض حاد (≥ 2 نقطة)' : 'Alert: Sharp Decline (≥ 2 points)'}
+                              {isRtl ? 'تنبيه: انخفاض حاد (≥ 4 نقاط)' : 'Alert: Sharp Decline (≥ 4 points)'}
                             </span>
                           </div>
                         )}
@@ -222,8 +222,8 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
                               reversed={isRtl} 
                             />
                             <YAxis 
-                              domain={[0, 5]}
-                              ticks={[1, 2, 3, 4, 5]}
+                              domain={[0, 10]}
+                              ticks={[2, 4, 6, 8, 10]}
                               axisLine={false} 
                               tickLine={false} 
                               tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
@@ -256,7 +256,7 @@ const QuestionTrends: React.FC<QuestionTrendsProps> = ({ users, templates, respo
                             </span>
                          </div>
                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map(star => (
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => (
                                <Star 
                                  key={star} 
                                  className={`w-2.5 h-2.5 ${star <= Math.round(Number(getQuestionAvg(q.id))) ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} 

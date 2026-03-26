@@ -47,7 +47,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
       let totalQuestionWeights = 0;
       category.questions.forEach(q => {
         const score = answers[q.id] || 0;
-        const denominator = score > 5 ? 10 : 5;
+        const denominator = 10;
         categoryRawScore += (score / denominator) * q.weight;
         totalQuestionWeights += q.weight;
       });
@@ -159,10 +159,10 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
                   <div className="space-y-4">
                     <div className={`flex justify-between text-[10px] font-black text-slate-400 px-1 uppercase tracking-widest ${isRtl ? 'flex-row-reverse' : ''}`}>
                       <span>1: {isRtl ? "مبتدئ" : "Amateur"}</span>
-                      <span>5: {isRtl ? "محترف" : "Pro"}</span>
+                      <span>10: {isRtl ? "محترف" : "Pro"}</span>
                     </div>
-                    <div className={`grid grid-cols-5 gap-2 md:gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      {[1, 2, 3, 4, 5].map((val) => {
+                    <div className={`grid grid-cols-5 md:grid-cols-10 gap-2 md:gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((val) => {
                         const isPrevious = previousResponse?.answers[q.id] === val;
                         return (
                           <button
@@ -170,7 +170,7 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
                             type="button"
                             onClick={() => handleScoreChange(q.id, val)}
                             className={`
-                              relative h-16 md:h-20 rounded-2xl border-2 flex items-center justify-center text-xl md:text-2xl font-black transition-all transform active:scale-95
+                              relative h-14 md:h-16 rounded-xl border-2 flex items-center justify-center text-lg md:text-xl font-black transition-all transform active:scale-95
                               ${answers[q.id] === val
                                 ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                                 : isPrevious

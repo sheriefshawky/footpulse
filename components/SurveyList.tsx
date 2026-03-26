@@ -291,7 +291,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                 let totalQWeights = 0;
                 cat.questions.forEach(q => {
                   const score = selectedResponse.answers[q.id] || 0;
-                  const denominator = score > 5 ? 10 : 5;
+                  const denominator = 10;
                   catRawScore += (score / denominator) * q.weight;
                   totalQWeights += q.weight;
                 });
@@ -310,7 +310,7 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
                          const score = selectedResponse.answers[q.id];
                          const selectedOption = q.options?.find(opt => opt.value === score);
                          
-                         const denominator = score > 5 ? 10 : 5;
+                         const denominator = 10;
                          const displayText = selectedOption 
                             ? (isRtl ? selectedOption.arText : selectedOption.text)
                             : `${score}/${denominator}`;

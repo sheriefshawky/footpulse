@@ -172,7 +172,7 @@ const SurveyAnalytics: React.FC<SurveyAnalyticsProps> = ({ users, templates, res
       }
 
       if (qCount > 0) {
-        data[r.month].sum += (totalValue / qCount);
+        data[r.month].sum += (totalValue / (qCount * 10)) * 100;
         data[r.month].count += 1;
       } else {
         data[r.month].sum += r.weightedScore;
