@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { User, SurveyTemplate, SurveyResponse, Category, Language } from '../types';
-import { CheckCircle, AlertCircle, ArrowLeft, Send, Check, User as UserIcon, ChevronLeft } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowLeft, Send, Check, User as UserIcon, ChevronLeft, History } from 'lucide-react';
 import { translations } from '../translations';
 
 interface Props {
@@ -10,12 +10,13 @@ interface Props {
   month: string;
   currentUser: User;
   users: User[];
+  responses: SurveyResponse[];
   onSubmit: (response: SurveyResponse) => void;
   onCancel: () => void;
   lang: Language;
 }
 
-const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, users, onSubmit, onCancel, lang }) => {
+const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, users, responses, onSubmit, onCancel, lang }) => {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
 
@@ -28,6 +29,12 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
     users.find(u => u.id === targetId),
     [users, targetId]
   );
+
+  const previousResponse = useMemo(() => {
+    return responses
+      .filter(r => r.templateId === template.id && r.targetPlayerId === targetId && r.userId === currentUser.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  }, [responses, template.id, targetId, currentUser.id]);
 
   const handleScoreChange = (qId: string, score: number) => {
     setAnswers(prev => ({ ...prev, [qId]: score }));
@@ -130,8 +137,22 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
           <div className="space-y-16">
             {currentCategory.questions.map((q) => (
               <div key={q.id} className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-                <div className={`flex items-start justify-between gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                  <div className={`flex items-start justify-between gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
                    <h5 className="text-lg font-bold text-slate-800 leading-snug max-w-xl">{isRtl ? q.arText : q.text}</h5>
+                   
+                   {previousResponse?.answers[q.id] !== undefined && (
+                     <div className={`flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl text-[10px] font-black text-slate-500 border border-slate-200/50 whitespace-nowrap ${isRtl ? 'flex-row-reverse' : ''}`}>
+                       <History className="w-3 h-3 text-slate-400" />
+                       <span className="uppercase tracking-wider">{t.previousValue}:</span>
+                       <span className="text-emerald-600 text-xs">
+                         {q.type === 'MULTIPLE_CHOICE' 
+                           ? (isRtl 
+                               ? q.options?.find(o => o.value === previousResponse.answers[q.id])?.arText 
+                               : q.options?.find(o => o.value === previousResponse.answers[q.id])?.text)
+                           : previousResponse.answers[q.id]}
+                       </span>
+                     </div>
+                   )}
                 </div>
                 
                 {q.type === 'RATING' ? (
@@ -141,45 +162,67 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, currentUser, u
                       <span>5: {isRtl ? "محترف" : "Pro"}</span>
                     </div>
                     <div className={`grid grid-cols-5 gap-2 md:gap-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      {[1, 2, 3, 4, 5].map((val) => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => handleScoreChange(q.id, val)}
-                          className={`
-                            h-16 md:h-20 rounded-2xl border-2 flex items-center justify-center text-xl md:text-2xl font-black transition-all transform active:scale-95
-                            ${answers[q.id] === val
-                              ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                              : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200 hover:bg-white'
-                            }
-                          `}
-                        >
-                          {val}
-                        </button>
-                      ))}
+                      {[1, 2, 3, 4, 5].map((val) => {
+                        const isPrevious = previousResponse?.answers[q.id] === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => handleScoreChange(q.id, val)}
+                            className={`
+                              relative h-16 md:h-20 rounded-2xl border-2 flex items-center justify-center text-xl md:text-2xl font-black transition-all transform active:scale-95
+                              ${answers[q.id] === val
+                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                                : isPrevious
+                                  ? 'bg-slate-50 border-emerald-200 text-slate-600 hover:border-emerald-300'
+                                  : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200 hover:bg-white'
+                              }
+                            `}
+                          >
+                            {val}
+                            {isPrevious && (
+                              <div className="absolute -top-2 -right-2 bg-slate-800 text-white text-[8px] px-1.5 py-0.5 rounded-full border border-white shadow-sm font-black uppercase tracking-tighter">
+                                {isRtl ? 'السابق' : 'Prev'}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
                   <div className={`grid grid-cols-1 md:grid-cols-2 gap-3`}>
-                    {q.options?.map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => handleScoreChange(q.id, opt.value)}
-                        className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between group ${
-                          answers[q.id] === opt.value
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-lg shadow-emerald-500/5'
-                          : 'border-slate-100 bg-slate-50/50 hover:border-slate-200 text-slate-600 hover:bg-slate-50'
-                        } ${isRtl ? 'flex-row-reverse text-right' : ''}`}
-                      >
-                        <span className="text-sm font-bold">{isRtl ? opt.arText : opt.text}</span>
-                        {answers[q.id] === opt.value && (
-                          <div className="bg-emerald-500 text-white p-1 rounded-full">
-                            <Check className="w-3 h-3" />
+                    {q.options?.map((opt) => {
+                      const isPrevious = previousResponse?.answers[q.id] === opt.value;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleScoreChange(q.id, opt.value)}
+                          className={`relative p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between group ${
+                            answers[q.id] === opt.value
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-lg shadow-emerald-500/5'
+                            : isPrevious
+                              ? 'border-emerald-200 bg-slate-50 text-slate-700 hover:border-emerald-300'
+                              : 'border-slate-100 bg-slate-50/50 hover:border-slate-200 text-slate-600 hover:bg-slate-50'
+                          } ${isRtl ? 'flex-row-reverse text-right' : ''}`}
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold">{isRtl ? opt.arText : opt.text}</span>
+                            {isPrevious && (
+                              <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mt-0.5">
+                                {isRtl ? 'القيمة السابقة' : 'Previous Value'}
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </button>
-                    ))}
+                          {answers[q.id] === opt.value && (
+                            <div className="bg-emerald-500 text-white p-1 rounded-full">
+                              <Check className="w-3 h-3" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
