@@ -1,4 +1,7 @@
 
+/**
+ * Translation keys for English and Arabic.
+ */
 export const translations = {
   en: {
     dashboard: "Dashboard",
@@ -118,7 +121,8 @@ export const translations = {
     selectUser: "Select User",
     selectTemplate: "Select Template",
     noDataForQuestion: "No data available for this question",
-    individualQuestionTrends: "Individual Question Trends"
+    individualQuestionTrends: "Individual Question Trends",
+    previousValue: "Previous Value",
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -238,6 +242,7 @@ export const translations = {
     selectUser: "اختر المستخدم",
     selectTemplate: "اختر القالب",
     noDataForQuestion: "لا توجد بيانات متاحة لهذا السؤال",
-    individualQuestionTrends: "اتجاهات الأسئلة الفردية"
+    individualQuestionTrends: "اتجاهات الأسئلة الفردية",
+    previousValue: "القيمة السابقة",
   }
 };

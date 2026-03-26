@@ -1,4 +1,7 @@
 
+/**
+ * Main application component for FootPulse Analytics.
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Users, 
@@ -304,6 +307,7 @@ const App: React.FC = () => {
               month={activeSurvey.month}
               currentUser={currentUser}
               users={users}
+              responses={responses}
               onSubmit={submitSurvey}
               onCancel={() => setActiveSurvey(null)}
               lang={lang}
