@@ -381,15 +381,15 @@ const TrainingSessions: React.FC<TrainingSessionsProps> = ({ currentUser, lang }
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-4xl bg-white rounded-[40px] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[80vh]"
+              className="relative w-full max-w-4xl bg-white rounded-3xl md:rounded-[40px] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[90vh] md:h-[80vh]"
             >
               {/* Sidebar: Player List */}
-              <div className="w-full md:w-80 border-r border-slate-100 flex flex-col">
-                <div className="p-6 border-b border-slate-100">
-                  <h3 className="text-xl font-black text-slate-900">{(t as any).players}</h3>
-                  <p className="text-xs font-bold text-slate-400">{selectedSession.playerIds.length} in session</p>
+              <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col h-[35%] md:h-full">
+                <div className="p-4 md:p-6 border-b border-slate-100">
+                  <h3 className="text-lg md:text-xl font-black text-slate-900">{(t as any).players}</h3>
+                  <p className="text-[10px] md:text-xs font-bold text-slate-400">{selectedSession.playerIds.length} in session</p>
                 </div>
-                <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-2">
+                <div className="flex-1 overflow-y-auto no-scrollbar p-3 md:p-4 space-y-2">
                   {selectedSession.playerIds.map(pid => {
                     const player = players.find(p => p.id === pid);
                     const evaluation = getEvaluationForPlayer(pid);
@@ -401,27 +401,27 @@ const TrainingSessions: React.FC<TrainingSessionsProps> = ({ currentUser, lang }
                           setRating(evaluation?.rating || 5);
                           setComments(evaluation?.comments || '');
                         }}
-                        className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all ${
+                        className={`w-full flex items-center gap-3 p-2.5 md:p-3 rounded-xl md:rounded-2xl transition-all ${
                           activePlayer?.id === pid
                             ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100'
                             : 'hover:bg-slate-50 text-slate-700'
                         }`}
                       >
-                        <img src={player?.avatar} className="w-10 h-10 rounded-full border-2 border-white object-cover" alt="" />
-                        <div className="text-left flex-1">
-                          <p className="text-sm font-bold truncate">{player?.name}</p>
+                        <img src={player?.avatar} className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-white object-cover" alt="" />
+                        <div className="text-left flex-1 min-w-0">
+                          <p className="text-xs md:text-sm font-bold truncate">{player?.name}</p>
                           <div className="flex items-center gap-1">
                             {evaluation ? (
                               <div className="flex items-center gap-1">
-                                <Star className={`w-3 h-3 ${activePlayer?.id === pid ? 'text-emerald-200' : 'text-amber-400'} fill-current`} />
-                                <span className="text-[10px] font-black">{evaluation.rating}/10</span>
+                                <Star className={`w-2.5 h-2.5 ${activePlayer?.id === pid ? 'text-emerald-200' : 'text-amber-400'} fill-current`} />
+                                <span className="text-[9px] md:text-[10px] font-black">{evaluation.rating}/10</span>
                               </div>
                             ) : (
-                              <span className={`text-[10px] font-bold ${activePlayer?.id === pid ? 'text-emerald-200' : 'text-slate-400'}`}>Pending</span>
+                              <span className={`text-[9px] md:text-[10px] font-bold ${activePlayer?.id === pid ? 'text-emerald-200' : 'text-slate-400'}`}>Pending</span>
                             )}
                           </div>
                         </div>
-                        {evaluation && <CheckCircle2 className={`w-4 h-4 ${activePlayer?.id === pid ? 'text-white' : 'text-emerald-500'}`} />}
+                        {evaluation && <CheckCircle2 className={`w-3.5 h-3.5 md:w-4 h-4 ${activePlayer?.id === pid ? 'text-white' : 'text-emerald-500'}`} />}
                       </button>
                     );
                   })}
@@ -429,15 +429,15 @@ const TrainingSessions: React.FC<TrainingSessionsProps> = ({ currentUser, lang }
               </div>
 
               {/* Main: Evaluation Form */}
-              <div className="flex-1 flex flex-col bg-slate-50/50">
-                <div className="p-6 bg-white border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+              <div className="flex-1 flex flex-col bg-slate-50/50 h-[65%] md:h-full">
+                <div className="p-4 md:p-6 bg-white border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3 md:gap-4">
                     {activePlayer && (
                       <>
-                        <img src={activePlayer.avatar} className="w-12 h-12 rounded-full object-cover" alt="" />
+                        <img src={activePlayer.avatar} className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover" alt="" />
                         <div>
-                          <h4 className="text-lg font-black text-slate-900">{activePlayer.name}</h4>
-                          <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">{activePlayer.position}</p>
+                          <h4 className="text-sm md:text-lg font-black text-slate-900">{activePlayer.name}</h4>
+                          <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">{activePlayer.position}</p>
                         </div>
                       </>
                     )}
@@ -446,62 +446,62 @@ const TrainingSessions: React.FC<TrainingSessionsProps> = ({ currentUser, lang }
                     onClick={() => setIsEvaluationModalOpen(false)}
                     className="p-2 hover:bg-slate-100 rounded-full transition-all"
                   >
-                    <X className="w-6 h-6 text-slate-400" />
+                    <X className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto no-scrollbar p-8">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8">
                   {activePlayer ? (
-                    <div className="max-w-xl mx-auto space-y-10">
-                      <div className="space-y-6">
+                    <div className="max-w-xl mx-auto space-y-6 md:space-y-10">
+                      <div className="space-y-4 md:space-y-6">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{(t as any).overallEvaluation}</label>
-                          <span className="text-4xl font-black text-emerald-600">{rating}<span className="text-lg text-slate-300">/10</span></span>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(t as any).overallEvaluation}</label>
+                          <span className="text-2xl md:text-4xl font-black text-emerald-600">{rating}<span className="text-sm md:text-lg text-slate-300">/10</span></span>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-5 md:flex md:gap-2 gap-2">
                           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                             <button
                               key={num}
                               onClick={() => setRating(num)}
-                              className={`flex-1 aspect-square rounded-xl font-black transition-all ${
+                              className={`aspect-square rounded-lg md:rounded-xl font-black transition-all text-sm md:text-base ${
                                 rating === num
                                   ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100 scale-110'
                                   : 'bg-white text-slate-400 hover:bg-emerald-50 hover:text-emerald-600'
-                              }`}
+                              } ${num > 5 ? 'md:flex-1' : 'md:flex-1'}`}
                             >
                               {num}
                             </button>
                           ))}
                         </div>
-                        <div className="flex justify-between text-[10px] font-black text-slate-300 uppercase tracking-widest px-1">
+                        <div className="flex justify-between text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest px-1">
                           <span>{(t as any).needsImprovement}</span>
                           <span>{(t as any).eliteLevel}</span>
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{(t as any).comments}</label>
+                      <div className="space-y-3 md:space-y-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(t as any).comments}</label>
                         <textarea
                           value={comments}
                           onChange={(e) => setComments(e.target.value)}
                           placeholder="Add specific feedback for this session..."
-                          className="w-full h-40 px-6 py-4 bg-white border-2 border-slate-100 rounded-3xl font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
+                          className="w-full h-32 md:h-40 px-4 md:px-6 py-3 md:py-4 bg-white border-2 border-slate-100 rounded-2xl md:rounded-3xl font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none text-sm"
                         />
                       </div>
 
                       <button
                         disabled={submitting}
                         onClick={handleSubmitEvaluation}
-                        className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+                        className="w-full py-4 md:py-5 bg-slate-900 text-white rounded-2xl md:rounded-3xl font-black text-base md:text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
                       >
-                        <Save className="w-6 h-6" />
+                        <Save className="w-5 h-5 md:w-6 md:h-6" />
                         <span>{submitting ? '...' : (t as any).saveEvaluation}</span>
                       </button>
                     </div>
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
-                      <Users className="w-16 h-16 text-slate-300" />
-                      <p className="text-xl font-black text-slate-400">Select a player to start evaluation</p>
+                      <Users className="w-12 h-12 md:w-16 md:h-16 text-slate-300" />
+                      <p className="text-lg md:text-xl font-black text-slate-400">Select a player to start evaluation</p>
                     </div>
                   )}
                 </div>
