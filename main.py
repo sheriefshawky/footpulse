@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Boolean, Enum as SQLEnum, text, or_, and_
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Boolean, Enum as SQLEnum, text, or_, and_, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
@@ -83,7 +83,39 @@ class SurveyResponse(Base):
     answers = Column(JSON)
     weighted_score = Column(Float)
 
-Base.metadata.create_all(bind=engine)
+# --- DB INITIALIZATION ---
+def init_db():
+    # Create tables if they don't exist
+    Base.metadata.create_all(bind=engine)
+    
+    # Check for missing columns (Migrations)
+    inspector = inspect(engine)
+    if "users" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("users")]
+        
+        # 1. Ensure player_ids exists (for Doctor persona)
+        if "player_ids" not in columns:
+            with engine.connect() as conn:
+                col_type = "JSONB" if DATABASE_URL.startswith("postgresql") else "JSON"
+                try:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN player_ids {col_type}"))
+                    conn.commit()
+                except Exception as e:
+                    print(f"Migration error (player_ids): {e}")
+
+        # 2. Handle Postgres Enum update if necessary
+        if DATABASE_URL.startswith("postgresql"):
+            try:
+                with engine.connect() as conn:
+                    # Check if DOCTOR exists in the enum
+                    # This is a bit complex in SQL, but we can try adding it and catch the error if it exists
+                    conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'DOCTOR'"))
+                    conn.commit()
+            except Exception:
+                # IF NOT EXISTS is supported in Postgres 9.4+
+                pass
+
+init_db()
 
 # --- AUTH UTILS ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
