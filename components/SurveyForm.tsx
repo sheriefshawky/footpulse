@@ -1,8 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
-import { User, SurveyTemplate, SurveyResponse, Category, Language } from '../types';
-import { CheckCircle, AlertCircle, ArrowLeft, Send, Check, User as UserIcon, ChevronLeft, History } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { User, UserRole, SurveyTemplate, SurveyResponse, Category, Language } from '../types';
+import { CheckCircle, AlertCircle, ArrowLeft, Send, Check, User as UserIcon, ChevronLeft, History, Star, MessageSquare } from 'lucide-react';
 import { translations } from '../translations';
+import { api } from '../api';
 
 interface Props {
   template: SurveyTemplate;
@@ -21,6 +22,21 @@ interface Props {
 const SurveyForm: React.FC<Props> = ({ template, targetId, month, year, week, currentUser, users, responses, onSubmit, onCancel, lang }) => {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
+  const [recentEvaluations, setRecentEvaluations] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchRecentEvaluations = async () => {
+      if (currentUser.role === UserRole.TRAINER || currentUser.role === UserRole.ADMIN) {
+        try {
+          const data = await api.get(`/players/${targetId}/training-evaluations`);
+          setRecentEvaluations(data);
+        } catch (err) {
+          console.error("Failed to fetch recent evaluations", err);
+        }
+      }
+    };
+    fetchRecentEvaluations();
+  }, [targetId, currentUser.role]);
 
   const t = translations[lang];
   const isRtl = lang === 'ar';
@@ -137,6 +153,36 @@ const SurveyForm: React.FC<Props> = ({ template, targetId, month, year, week, cu
               {isRtl ? "يرجى الإجابة بدقة على جميع الأسئلة في هذا القسم." : "Please answer all questions in this section accurately."}
             </p>
           </div>
+
+          {(currentUser.role === UserRole.TRAINER || currentUser.role === UserRole.ADMIN) && recentEvaluations.length > 0 && (
+            <div className="mb-12 bg-slate-50 rounded-3xl p-6 border border-slate-100">
+              <div className={`flex items-center gap-2 mb-4 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                <Star className="w-5 h-5 text-amber-500 fill-current" />
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{(t as any).recentTrainingEvaluations}</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {recentEvaluations.map((evalItem) => (
+                  <div key={evalItem.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                        {new Date(evalItem.date).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Star className="w-3 h-3 text-amber-400 fill-current" />
+                        <span className="text-xs font-black text-slate-900">{evalItem.rating}/10</span>
+                      </div>
+                    </div>
+                    {evalItem.comments && (
+                      <div className="flex gap-1.5">
+                        <MessageSquare className="w-3 h-3 text-slate-300 flex-shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-slate-500 font-medium line-clamp-2 leading-tight">{evalItem.comments}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-16">
             {currentCategory.questions.map((q) => (

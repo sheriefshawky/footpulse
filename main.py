@@ -784,4 +784,27 @@ def submit_training_evaluation(session_id: str, data: TrainingEvaluationSubmit, 
         "rating": evaluation.rating,
         "comments": evaluation.comments
     }
+
+@app.get("/players/{player_id}/training-evaluations")
+def get_player_training_evaluations(player_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role not in [UserRole.ADMIN, UserRole.TRAINER]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    evaluations = db.query(TrainingEvaluation, TrainingSession.date)\
+        .join(TrainingSession, TrainingEvaluation.training_session_id == TrainingSession.id)\
+        .filter(TrainingEvaluation.player_id == player_id)\
+        .order_by(TrainingSession.date.desc())\
+        .limit(5)\
+        .all()
+    
+    return [
+        {
+            "id": e.TrainingEvaluation.id,
+            "trainingSessionId": e.TrainingEvaluation.training_session_id,
+            "playerId": e.TrainingEvaluation.player_id,
+            "rating": e.TrainingEvaluation.rating,
+            "comments": e.TrainingEvaluation.comments,
+            "date": e.date.isoformat()
+        } for e in evaluations
+    ]
     

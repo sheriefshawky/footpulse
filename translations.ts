@@ -143,6 +143,8 @@ export const translations = {
     noTrainingSessions: "No training sessions found.",
     overallEvaluation: "Overall Evaluation",
     playerEvaluation: "Player Evaluation",
+    recentTrainingEvaluations: "Recent Training Evaluations",
+    noRecentEvaluations: "No recent training evaluations found.",
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -284,5 +286,7 @@ export const translations = {
     noTrainingSessions: "لا توجد حصص تدريبية.",
     overallEvaluation: "التقييم العام",
     playerEvaluation: "تقييم اللاعب",
+    recentTrainingEvaluations: "تقييمات التدريب الأخيرة",
+    noRecentEvaluations: "لا توجد تقييمات تدريبية أخيرة.",
   }
 };
