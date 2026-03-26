@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SurveyTemplate, Category, Question, QuestionOption, QuestionType, Language, User, UserRole } from '../types';
-import { Plus, Edit3, Trash2, X, ChevronDown, ChevronUp, Save, Layout, Send, HelpCircle, Check, Search, Filter, Users, Star, Zap, Shield, UserCheck, ArrowRight, ZapOff, AlertCircle, Info } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, ChevronDown, ChevronUp, Save, Layout, Send, HelpCircle, Check, Search, Filter, Users, Star, Zap, Shield, Heart, UserCheck, ArrowRight, ZapOff, AlertCircle, Info } from 'lucide-react';
 import { translations } from '../translations';
 import { api } from '../api';
 
@@ -379,6 +379,7 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                         { id: 'GUARDIANS_TO_COACHES', label: t.assignAllGuardiansToCoaches, desc: "Guardians evaluate their child's coach", icon: <Star className="w-6 h-6" />, color: 'blue' },
                         { id: 'PLAYERS_TO_COACHES', label: t.assignAllPlayersToCoaches, desc: 'Players evaluate their coach', icon: <Zap className="w-6 h-6" />, color: 'purple' },
                         { id: 'COACHES_TO_PLAYERS', label: t.assignAllCoachesToPlayers, desc: 'Coaches evaluate players they train', icon: <Shield className="w-6 h-6" />, color: 'rose' },
+                        { id: 'DOCTORS_TO_PLAYERS', label: t.assignAllDoctorsToPlayers, desc: 'Doctors evaluate players they serve', icon: <Heart className="w-6 h-6" />, color: 'pink' },
                       ].map(type => (
                         <button 
                           key={type.id} 

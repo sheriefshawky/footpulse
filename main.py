@@ -473,6 +473,12 @@ def preview_bulk_assignments(data: AssignmentCreate, current_user: User = Depend
                 if u.role == UserRole.TRAINER:
                     roster = [p for p in all_users if p.trainer_id == u.id]
                     for p in roster: pairs.append((u, p))
+        elif data.bulk_type == "DOCTORS_TO_PLAYERS":
+            for u in all_users:
+                if u.role == UserRole.DOCTOR and u.player_ids:
+                    for p_id in u.player_ids:
+                        p = user_map.get(p_id)
+                        if p: pairs.append((u, p))
     elif data.respondent_ids and data.target_ids:
         for r_id in data.respondent_ids:
             for t_id in data.target_ids:
@@ -502,6 +508,11 @@ def create_assignments(data: AssignmentCreate, current_user: User = Depends(get_
                 if u.role == UserRole.TRAINER:
                     roster = [p.id for p in all_users if p.trainer_id == u.id]
                     for p_id in roster: pairs.append((u.id, p_id))
+        elif data.bulk_type == "DOCTORS_TO_PLAYERS":
+            for u in all_users:
+                if u.role == UserRole.DOCTOR and u.player_ids:
+                    for p_id in u.player_ids:
+                        pairs.append((u.id, p_id))
     elif data.respondent_ids and data.target_ids:
         for r in data.respondent_ids:
             for t in data.target_ids: pairs.append((r, t))
