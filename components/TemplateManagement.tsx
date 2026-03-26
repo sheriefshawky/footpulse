@@ -42,6 +42,12 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewSearch, setPreviewSearch] = useState('');
 
+  // Manual Selection Filtering
+  const [respondentSearch, setRespondentSearch] = useState('');
+  const [respondentRoleFilter, setRespondentRoleFilter] = useState<string>('ALL');
+  const [targetSearch, setTargetSearch] = useState('');
+  const [targetRoleFilter, setTargetRoleFilter] = useState<string>('ALL');
+
   const emptyTemplate = (): SurveyTemplate => ({
     id: '',
     name: '',
@@ -449,9 +455,41 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                   <div className="space-y-6 animate-in fade-in">
                     <div className="flex flex-col md:flex-row gap-6">
                       <div className="flex-1 space-y-4">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{isRtl ? 'المستجيبون' : 'Respondents'}</label>
+                        <div className={`flex items-center justify-between px-1 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'المستجيبون' : 'Respondents'}</label>
+                          <span className="text-[10px] font-bold text-emerald-600">{selectedRespondents.size} {isRtl ? 'مختار' : 'selected'}</span>
+                        </div>
+                        
+                        <div className={`flex gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                          <div className="relative flex-1">
+                            <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400`} />
+                            <input 
+                              type="text"
+                              value={respondentSearch}
+                              onChange={(e) => setRespondentSearch(e.target.value)}
+                              placeholder={(t as any).filterByName}
+                              className={`w-full ${isRtl ? 'pr-9' : 'pl-9'} py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none transition-all`}
+                            />
+                          </div>
+                          <select
+                            value={respondentRoleFilter}
+                            onChange={(e) => setRespondentRoleFilter(e.target.value)}
+                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            <option value="ALL">{(t as any).allRoles}</option>
+                            {Object.values(UserRole).map(role => (
+                              <option key={role} value={role}>{role}</option>
+                            ))}
+                          </select>
+                        </div>
+
                         <div className="max-h-64 overflow-y-auto border border-slate-100 rounded-2xl p-2 space-y-1 bg-slate-50/50 no-scrollbar">
-                          {users.map(u => (
+                          {users
+                            .filter(u => 
+                              (respondentRoleFilter === 'ALL' || u.role === respondentRoleFilter) &&
+                              u.name.toLowerCase().includes(respondentSearch.toLowerCase())
+                            )
+                            .map(u => (
                             <button key={u.id} onClick={() => {
                               const next = new Set(selectedRespondents);
                               if (next.has(u.id)) next.delete(u.id); else next.add(u.id);
@@ -466,10 +504,43 @@ const TemplateManagement: React.FC<Props> = ({ templates, users, onUpdate, lang 
                           ))}
                         </div>
                       </div>
+
                       <div className="flex-1 space-y-4">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{isRtl ? 'الأهداف' : 'Targets'}</label>
+                        <div className={`flex items-center justify-between px-1 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{isRtl ? 'الأهداف' : 'Targets'}</label>
+                          <span className="text-[10px] font-bold text-blue-600">{selectedTargets.size} {isRtl ? 'مختار' : 'selected'}</span>
+                        </div>
+
+                        <div className={`flex gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                          <div className="relative flex-1">
+                            <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400`} />
+                            <input 
+                              type="text"
+                              value={targetSearch}
+                              onChange={(e) => setTargetSearch(e.target.value)}
+                              placeholder={(t as any).filterByName}
+                              className={`w-full ${isRtl ? 'pr-9' : 'pl-9'} py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none transition-all`}
+                            />
+                          </div>
+                          <select
+                            value={targetRoleFilter}
+                            onChange={(e) => setTargetRoleFilter(e.target.value)}
+                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            <option value="ALL">{(t as any).allRoles}</option>
+                            {Object.values(UserRole).map(role => (
+                              <option key={role} value={role}>{role}</option>
+                            ))}
+                          </select>
+                        </div>
+
                         <div className="max-h-64 overflow-y-auto border border-slate-100 rounded-2xl p-2 space-y-1 bg-slate-50/50 no-scrollbar">
-                          {users.map(u => (
+                          {users
+                            .filter(u => 
+                              (targetRoleFilter === 'ALL' || u.role === targetRoleFilter) &&
+                              u.name.toLowerCase().includes(targetSearch.toLowerCase())
+                            )
+                            .map(u => (
                             <button key={u.id} onClick={() => {
                               const next = new Set(selectedTargets);
                               if (next.has(u.id)) next.delete(u.id); else next.add(u.id);

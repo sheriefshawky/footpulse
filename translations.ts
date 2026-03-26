@@ -145,6 +145,8 @@ export const translations = {
     playerEvaluation: "Player Evaluation",
     recentTrainingEvaluations: "Recent Training Evaluations",
     noRecentEvaluations: "No recent training evaluations found.",
+    allRoles: "All Roles",
+    filterByName: "Filter by name...",
   },
   ar: {
     dashboard: "لوحة التحكم",
@@ -288,5 +290,7 @@ export const translations = {
     playerEvaluation: "تقييم اللاعب",
     recentTrainingEvaluations: "تقييمات التدريب الأخيرة",
     noRecentEvaluations: "لا توجد تقييمات تدريبية أخيرة.",
+    allRoles: "جميع الأدوار",
+    filterByName: "تصفية حسب الاسم...",
   }
 };
