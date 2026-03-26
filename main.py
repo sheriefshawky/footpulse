@@ -36,6 +36,7 @@ class UserRole(str, enum.Enum):
     PLAYER = 'PLAYER'
     GUARDIAN = 'GUARDIAN'
     TRAINER = 'TRAINER'
+    DOCTOR = 'DOCTOR'
 
 class User(Base):
     __tablename__ = "users"
@@ -48,6 +49,7 @@ class User(Base):
     avatar = Column(String, nullable=True)
     trainer_id = Column(String, ForeignKey("users.id"), nullable=True)
     player_id = Column(String, ForeignKey("users.id"), nullable=True)
+    player_ids = Column(JSON, nullable=True) # For Doctors
     position = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
 
@@ -146,6 +148,7 @@ class UserCreate(BaseModel):
     role: UserRole
     trainer_id: Optional[str] = None
     player_id: Optional[str] = None
+    player_ids: Optional[List[str]] = None
     position: Optional[str] = None
 
 class UserUpdate(BaseModel):
@@ -155,6 +158,7 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     trainer_id: Optional[str] = None
     player_id: Optional[str] = None
+    player_ids: Optional[List[str]] = None
     position: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -197,6 +201,7 @@ def map_user(u: User):
         "avatar": u.avatar,
         "trainerId": u.trainer_id,
         "playerId": u.player_id,
+        "playerIds": u.player_ids,
         "position": u.position,
         "isActive": u.is_active
     }
@@ -262,6 +267,9 @@ def list_users(current_user: User = Depends(get_current_user), db: Session = Dep
         user_ids.add(current_user.player_id)
         child = db.query(User).filter(User.id == current_user.player_id).first()
         if child and child.trainer_id: user_ids.add(child.trainer_id)
+    elif current_user.role == UserRole.DOCTOR:
+        if current_user.player_ids:
+            for p_id in current_user.player_ids: user_ids.add(p_id)
     users = db.query(User).filter(User.id.in_(list(user_ids)), User.is_active == True).all()
     return [map_user(u) for u in users]
 
@@ -278,6 +286,7 @@ def create_user(user_data: UserCreate, current_user: User = Depends(get_current_
         role=user_data.role,
         trainer_id=user_data.trainer_id,
         player_id=user_data.player_id,
+        player_ids=user_data.player_ids,
         position=user_data.position,
         avatar=f"https://picsum.photos/200/200?random={os.urandom(2).hex()}",
         is_active=True
@@ -299,6 +308,7 @@ def update_user(user_id: str, data: UserUpdate, current_user: User = Depends(get
     if data.role is not None: user.role = data.role
     if data.trainer_id is not None: user.trainer_id = data.trainer_id or None
     if data.player_id is not None: user.player_id = data.player_id or None
+    if data.player_ids is not None: user.player_ids = data.player_ids or None
     if data.position is not None: user.position = data.position or None
     if data.is_active is not None: user.is_active = data.is_active
     db.commit()
@@ -385,6 +395,17 @@ def get_assignments(current_user: User = Depends(get_current_user), db: Session 
                 target = db.query(User).filter(User.id == a.target_id).first()
                 if resp and resp.role == UserRole.GUARDIAN and target and target.trainer_id == current_user.id:
                     results.append(a)
+        return [map_assignment(a) for a in results]
+    
+    if current_user.role == UserRole.DOCTOR:
+        # Doctor sees: Their own assignments OR assignments for players they serve
+        assignments = db.query(SurveyAssignment).all()
+        results = []
+        for a in assignments:
+            if a.respondent_id == current_user.id:
+                results.append(a)
+            elif current_user.player_ids and a.target_id in current_user.player_ids:
+                results.append(a)
         return [map_assignment(a) for a in results]
     
     return [map_assignment(a) for a in db.query(SurveyAssignment).filter(
@@ -484,6 +505,17 @@ def get_responses(current_user: User = Depends(get_current_user), db: Session = 
                 target = db.query(User).filter(User.id == r.target_player_id).first()
                 if target and target.trainer_id == current_user.id:
                     results.append(r)
+        return [map_response(r) for r in results]
+    
+    if current_user.role == UserRole.DOCTOR:
+        # Doctor sees: Their own responses OR responses for players they serve
+        responses = db.query(SurveyResponse).all()
+        results = []
+        for r in responses:
+            if r.user_id == current_user.id:
+                results.append(r)
+            elif current_user.player_ids and r.target_player_id in current_user.player_ids:
+                results.append(r)
         return [map_response(r) for r in results]
     
     return [map_response(r) for r in db.query(SurveyResponse).filter(

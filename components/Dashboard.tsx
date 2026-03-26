@@ -48,6 +48,21 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
       ];
     }
     
+    if (user.role === UserRole.DOCTOR) {
+        const doctorPlayers = users.filter(u => user.playerIds?.includes(u.id));
+        const doctorResponses = responses.filter(r => user.playerIds?.includes(r.targetPlayerId));
+        const avgScore = doctorResponses.length > 0 
+            ? Math.round(doctorResponses.reduce((acc, r) => acc + r.weightedScore, 0) / doctorResponses.length) 
+            : 0;
+
+        return [
+            { label: t.player + 's', value: doctorPlayers.length, icon: <Users className="w-5 h-5" />, color: 'blue' },
+            { label: t.completed, value: doctorResponses.length, icon: <ClipboardCheck className="w-5 h-5" />, color: 'emerald' },
+            { label: t.avgPerformance, value: `${avgScore}%`, icon: <Trophy className="w-5 h-5" />, color: 'amber' },
+            { label: t.nextSession, value: isRtl ? 'اليوم' : 'Today', icon: <Calendar className="w-5 h-5" />, color: 'purple' },
+        ];
+    }
+
     // Non-admin stats
     // Players and Guardians see stats about the Player
     // Trainers see aggregate for their roster or specific evaluations
@@ -82,6 +97,9 @@ const Dashboard: React.FC<Props> = ({ user, responses, users, templates, assignm
         if (user.role === UserRole.TRAINER) {
             const target = users.find(u => u.id === r.targetPlayerId);
             return r.userId === user.id || target?.trainerId === user.id;
+        }
+        if (user.role === UserRole.DOCTOR) {
+            return user.playerIds?.includes(r.targetPlayerId);
         }
         return true;
     });

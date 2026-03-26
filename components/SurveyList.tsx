@@ -51,6 +51,10 @@ const SurveyList: React.FC<Props> = ({ user, users, templates, responses, assign
           // Player sees: Self as respondent or Self as target
           if (isRespondent || isTarget) isVisible = true;
         }
+        else if (user.role === UserRole.DOCTOR) {
+          // Doctor sees: Their own assignments OR assignments for players they serve
+          if (isRespondent || (user.playerIds && user.playerIds.includes(a.targetId))) isVisible = true;
+        }
       }
 
       if (!isVisible) return false;

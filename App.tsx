@@ -105,11 +105,11 @@ const App: React.FC = () => {
 
   const sidebarItems = useMemo(() => {
     const items = [
-      { id: 'dashboard', label: t.dashboard, icon: <LayoutDashboard className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
-      { id: 'surveys', label: t.surveys, icon: <ClipboardList className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
-      { id: 'analytics', label: t.analytics, icon: <TrendingUp className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN] },
-      { id: 'survey-analytics', label: t.surveyAnalytics, icon: <PieChart className="w-5 h-5" />, roles: [UserRole.ADMIN] },
-      { id: 'question-trends', label: t.questionTrends, icon: <LineChartIcon className="w-5 h-5" />, roles: [UserRole.ADMIN] },
+      { id: 'dashboard', label: t.dashboard, icon: <LayoutDashboard className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN, UserRole.DOCTOR] },
+      { id: 'surveys', label: t.surveys, icon: <ClipboardList className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN, UserRole.DOCTOR] },
+      { id: 'analytics', label: t.analytics, icon: <TrendingUp className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.PLAYER, UserRole.TRAINER, UserRole.GUARDIAN, UserRole.DOCTOR] },
+      { id: 'survey-analytics', label: t.surveyAnalytics, icon: <PieChart className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.DOCTOR] },
+      { id: 'question-trends', label: t.questionTrends, icon: <LineChartIcon className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.DOCTOR] },
       { id: 'users', label: t.users, icon: <Users className="w-5 h-5" />, roles: [UserRole.ADMIN] },
       { id: 'templates', label: t.templates, icon: <FileText className="w-5 h-5" />, roles: [UserRole.ADMIN] },
     ];
@@ -244,7 +244,8 @@ const App: React.FC = () => {
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
                 {currentUser.role === UserRole.ADMIN ? t.admin : 
                  currentUser.role === UserRole.TRAINER ? t.coach :
-                 currentUser.role === UserRole.PLAYER ? t.player : t.guardian}
+                 currentUser.role === UserRole.PLAYER ? t.player : 
+                 currentUser.role === UserRole.DOCTOR ? t.doctor : t.guardian}
               </p>
             </div>
           </div>

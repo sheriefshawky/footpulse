@@ -30,6 +30,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
     confirmPassword: '',
     trainerId: '',
     playerId: '',
+    playerIds: [] as string[],
     position: '',
     isActive: true
   });
@@ -59,6 +60,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
       confirmPassword: '',
       trainerId: '',
       playerId: '',
+      playerIds: [],
       position: '',
       isActive: true
     });
@@ -77,6 +79,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
       confirmPassword: '',
       trainerId: user.trainerId || '',
       playerId: user.playerId || '',
+      playerIds: user.playerIds || [],
       position: user.position || '',
       isActive: user.isActive
     });
@@ -118,6 +121,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           role: formData.role,
           trainer_id: formData.trainerId || null,
           player_id: formData.playerId || null,
+          player_ids: formData.role === UserRole.DOCTOR ? formData.playerIds : null,
           position: formData.position || null,
           is_active: formData.isActive
         });
@@ -131,6 +135,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
           password: formData.password,
           trainer_id: formData.trainerId || null,
           player_id: formData.playerId || null,
+          player_ids: formData.role === UserRole.DOCTOR ? formData.playerIds : null,
           position: formData.position || null
         });
         alert("Member registered successfully");
@@ -219,9 +224,10 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                       u.role === UserRole.ADMIN ? 'bg-indigo-50 text-indigo-600' :
                       u.role === UserRole.TRAINER ? 'bg-emerald-50 text-emerald-600' :
                       u.role === UserRole.PLAYER ? 'bg-blue-50 text-blue-600' :
+                      u.role === UserRole.DOCTOR ? 'bg-rose-50 text-rose-600' :
                       'bg-amber-50 text-amber-600'
                     }`}>
-                      {u.role === UserRole.TRAINER ? t.coach : u.role === UserRole.ADMIN ? t.admin : u.role === UserRole.PLAYER ? t.player : t.guardian}
+                      {u.role === UserRole.TRAINER ? t.coach : u.role === UserRole.ADMIN ? t.admin : u.role === UserRole.PLAYER ? t.player : u.role === UserRole.DOCTOR ? t.doctor : t.guardian}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -406,6 +412,7 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                     <option value={UserRole.PLAYER}>{t.player}</option>
                     <option value={UserRole.TRAINER}>{t.coach}</option>
                     <option value={UserRole.GUARDIAN}>{t.guardian}</option>
+                    <option value={UserRole.DOCTOR}>{t.doctor}</option>
                     <option value={UserRole.ADMIN}>{t.admin}</option>
                   </select>
                 </div>
@@ -480,6 +487,33 @@ const UserManagement: React.FC<Props> = ({ users, onRegister, lang }) => {
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
+                  </div>
+                )}
+
+                {formData.role === UserRole.DOCTOR && (
+                  <div className="md:col-span-2 space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                    <label className="text-[10px] font-black text-rose-600 uppercase tracking-widest px-1">{t.assignPlayers}</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-rose-50 p-4 rounded-xl border border-rose-200 max-h-[200px] overflow-y-auto no-scrollbar">
+                      {players.map(p => (
+                        <label key={p.id} className={`flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors cursor-pointer ${isRtl ? 'flex-row-reverse' : ''}`}>
+                          <input 
+                            type="checkbox"
+                            checked={formData.playerIds.includes(p.id)}
+                            onChange={(e) => {
+                              const newIds = e.target.checked 
+                                ? [...formData.playerIds, p.id]
+                                : formData.playerIds.filter(id => id !== p.id);
+                              setFormData({...formData, playerIds: newIds});
+                            }}
+                            className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                          />
+                          <div className={`flex items-center gap-2 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                            <img src={p.avatar} className="w-6 h-6 rounded-full border border-rose-100 object-cover" alt="" />
+                            <span className="text-xs font-bold text-slate-700">{p.name}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

@@ -120,6 +120,8 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       players = players.filter(p => p.id === user.playerId);
     } else if (user.role === UserRole.PLAYER) {
       players = players.filter(p => p.id === user.id);
+    } else if (user.role === UserRole.DOCTOR) {
+      players = players.filter(p => user.playerIds && user.playerIds.includes(p.id));
     }
     return players;
   }, [user, users, selectedTrainerIds]);
@@ -166,6 +168,7 @@ const Analytics: React.FC<Props> = ({ user, users, responses, templates, lang })
       else if (user.role === UserRole.TRAINER) roleMatch = targetPlayer.trainerId === user.id;
       else if (user.role === UserRole.GUARDIAN) roleMatch = targetPlayer.id === user.playerId;
       else if (user.role === UserRole.PLAYER) roleMatch = targetPlayer.id === user.id;
+      else if (user.role === UserRole.DOCTOR) roleMatch = user.playerIds && user.playerIds.includes(targetPlayer.id);
 
       return trainerMatch && playerMatch && monthMatch && templateMatch && roleMatch;
     }),

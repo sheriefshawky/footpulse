@@ -3,7 +3,8 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   PLAYER = 'PLAYER',
   GUARDIAN = 'GUARDIAN',
-  TRAINER = 'TRAINER'
+  TRAINER = 'TRAINER',
+  DOCTOR = 'DOCTOR'
 }
 
 export type Language = 'en' | 'ar';
@@ -26,6 +27,7 @@ export interface User {
   avatar?: string;
   trainerId?: string;
   playerId?: string;
+  playerIds?: string[];
   position?: string;
   password?: string;
   isActive: boolean;
