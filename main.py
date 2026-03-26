@@ -87,6 +87,21 @@ class SurveyResponse(Base):
     answers = Column(JSON)
     weighted_score = Column(Float)
 
+class TrainingSession(Base):
+    __tablename__ = "training_sessions"
+    id = Column(String, primary_key=True, index=True)
+    date = Column(DateTime)
+    trainer_id = Column(String, ForeignKey("users.id"))
+    player_ids = Column(JSON) # List of player IDs
+
+class TrainingEvaluation(Base):
+    __tablename__ = "training_evaluations"
+    id = Column(String, primary_key=True, index=True)
+    training_session_id = Column(String, ForeignKey("training_sessions.id"))
+    player_id = Column(String, ForeignKey("users.id"))
+    rating = Column(Integer)
+    comments = Column(String, nullable=True)
+
 # --- DB INITIALIZATION ---
 def init_db():
     # Create tables if they don't exist
@@ -243,6 +258,15 @@ class SurveySubmit(BaseModel):
     answers: Dict[str, int]
     weighted_score: float
 
+class TrainingSessionCreate(BaseModel):
+    date: datetime
+    player_ids: List[str]
+
+class TrainingEvaluationSubmit(BaseModel):
+    player_id: str
+    rating: int
+    comments: Optional[str] = None
+
 class TemplateCreateUpdate(BaseModel):
     name: str
     arName: str
@@ -301,6 +325,23 @@ def map_response(r: SurveyResponse):
         "date": r.date.isoformat(),
         "answers": r.answers,
         "weightedScore": r.weighted_score
+    }
+
+def map_training_session(s: TrainingSession, evaluations: List[TrainingEvaluation] = []):
+    return {
+        "id": s.id,
+        "date": s.date.isoformat(),
+        "trainerId": s.trainer_id,
+        "playerIds": s.player_ids,
+        "evaluations": [
+            {
+                "id": e.id,
+                "trainingSessionId": e.training_session_id,
+                "playerId": e.player_id,
+                "rating": e.rating,
+                "comments": e.comments
+            } for e in evaluations
+        ]
     }
 
 # --- ROUTES ---
@@ -631,4 +672,116 @@ def delete_response(response_id: str, current_user: User = Depends(get_current_u
         if assignment: assignment.status = 'PENDING'
         db.delete(r); db.commit()
     return {"message": "Deleted"}
+
+# --- TRAINING SESSION ROUTES ---
+
+@app.get("/training-sessions")
+def list_training_sessions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role not in [UserRole.ADMIN, UserRole.TRAINER]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    query = db.query(TrainingSession)
+    if current_user.role == UserRole.TRAINER:
+        query = query.filter(TrainingSession.trainer_id == current_user.id)
+    
+    sessions = query.order_by(TrainingSession.date.desc()).all()
+    return [map_training_session(s) for s in sessions]
+
+@app.post("/training-sessions")
+def create_training_session(data: TrainingSessionCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != UserRole.TRAINER:
+        raise HTTPException(status_code=403, detail="Trainer only")
+    
+    db_session = TrainingSession(
+        id=f"ts-{os.urandom(4).hex()}",
+        date=data.date,
+        trainer_id=current_user.id,
+        player_ids=data.player_ids
+    )
+    db.add(db_session)
+    db.commit()
+    db.refresh(db_session)
+    return map_training_session(db_session)
+
+@app.get("/training-sessions/{session_id}")
+def get_training_session(session_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = db.query(TrainingSession).filter(TrainingSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if current_user.role == UserRole.TRAINER and session.trainer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    evaluations = db.query(TrainingEvaluation).filter(TrainingEvaluation.training_session_id == session_id).all()
+    return map_training_session(session, evaluations)
+
+@app.patch("/training-sessions/{session_id}")
+def update_training_session(session_id: str, data: TrainingSessionCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = db.query(TrainingSession).filter(TrainingSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if current_user.role != UserRole.TRAINER or session.trainer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    session.date = data.date
+    session.player_ids = data.player_ids
+    db.commit()
+    return map_training_session(session)
+
+@app.delete("/training-sessions/{session_id}")
+def delete_training_session(session_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = db.query(TrainingSession).filter(TrainingSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if current_user.role != UserRole.TRAINER or session.trainer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    # Delete evaluations first
+    db.query(TrainingEvaluation).filter(TrainingEvaluation.training_session_id == session_id).delete()
+    db.delete(session)
+    db.commit()
+    return {"message": "Deleted"}
+
+@app.post("/training-sessions/{session_id}/evaluations")
+def submit_training_evaluation(session_id: str, data: TrainingEvaluationSubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = db.query(TrainingSession).filter(TrainingSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if current_user.role != UserRole.TRAINER or session.trainer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    if data.player_id not in session.player_ids:
+        raise HTTPException(status_code=400, detail="Player not in session")
+    
+    # Check if evaluation already exists
+    evaluation = db.query(TrainingEvaluation).filter(
+        TrainingEvaluation.training_session_id == session_id,
+        TrainingEvaluation.player_id == data.player_id
+    ).first()
+    
+    if evaluation:
+        evaluation.rating = data.rating
+        evaluation.comments = data.comments
+    else:
+        evaluation = TrainingEvaluation(
+            id=f"te-{os.urandom(4).hex()}",
+            training_session_id=session_id,
+            player_id=data.player_id,
+            rating=data.rating,
+            comments=data.comments
+        )
+        db.add(evaluation)
+    
+    db.commit()
+    db.refresh(evaluation)
+    return {
+        "id": evaluation.id,
+        "trainingSessionId": evaluation.training_session_id,
+        "playerId": evaluation.player_id,
+        "rating": evaluation.rating,
+        "comments": evaluation.comments
+    }
     

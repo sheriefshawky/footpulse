@@ -88,3 +88,19 @@ export interface PasswordChangeRequest {
   currentPassword: string;
   newPassword: string;
 }
+
+export interface TrainingEvaluation {
+  id: string;
+  trainingSessionId: string;
+  playerId: string;
+  rating: number;
+  comments?: string;
+}
+
+export interface TrainingSession {
+  id: string;
+  date: string;
+  trainerId: string;
+  playerIds: string[];
+  evaluations?: TrainingEvaluation[];
+}

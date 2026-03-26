@@ -40,6 +40,7 @@ import SurveyForm from './components/SurveyForm';
 import Analytics from './components/Analytics';
 import SurveyAnalytics from './components/SurveyAnalytics';
 import QuestionTrends from './components/QuestionTrends';
+import TrainingSessions from './components/TrainingSessions';
 import Login from './components/Login';
 import FootPulseLogo from './components/Logo';
 
@@ -112,6 +113,7 @@ const App: React.FC = () => {
       { id: 'question-trends', label: t.questionTrends, icon: <LineChartIcon className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.DOCTOR] },
       { id: 'users', label: t.users, icon: <Users className="w-5 h-5" />, roles: [UserRole.ADMIN] },
       { id: 'templates', label: t.templates, icon: <FileText className="w-5 h-5" />, roles: [UserRole.ADMIN] },
+      { id: 'training-sessions', label: t.trainingSessions, icon: <Users className="w-5 h-5" />, roles: [UserRole.ADMIN, UserRole.TRAINER] },
     ];
     return items.filter(item => item.roles.includes(currentUser?.role as UserRole));
   }, [currentUser, t]);
@@ -365,6 +367,12 @@ const App: React.FC = () => {
                   users={users} 
                   templates={templates}
                   responses={responses} 
+                  lang={lang}
+                />
+              )}
+              {activeTab === 'training-sessions' && (
+                <TrainingSessions 
+                  currentUser={currentUser}
                   lang={lang}
                 />
               )}
